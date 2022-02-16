@@ -1,10 +1,10 @@
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"os"
+	"strconv"
 )
 
 
@@ -27,6 +27,7 @@ type SkipList struct {
 	height    int
 	threshold  uint64
 	size      uint64
+	walThreshold uint64
 	head      *SkipListNode
 }
 
@@ -42,21 +43,22 @@ type SkipListNode struct {
 	next      []*SkipListNode
 }
 
-func(s *SkipList) emptySkiplList(node *SkipListNode) {
-	if node == nil{
-		s.size--
-		return
-	}
-	s.emptySkiplList(node.next[0])
-	s.deleteNode(node.key, 0)
-	s.size = 0
-}
+//func(s *SkipList) emptySkiplList(node *SkipListNode) {
+//	if node == nil{
+//		s.size--
+//		return
+//	}
+//	s.emptySkiplList(node.next[0])
+//	s.deleteNode(node.key, 0)
+//	s.size = 0
+//}
 
-func (s *SkipList) createSkipList(maxHeight uint64, treshold uint64){
+func (s *SkipList) createSkipList(maxHeight uint64, treshold uint64, walThreshold uint64){
 	s.maxHeight = maxHeight
 	s.head = &SkipListNode{}
 	s.head.key = ""
 	s.head.tombstone = 0
+	s.walThreshold = walThreshold
 	s.head.next = make([]*SkipListNode, s.maxHeight)
 	s.size = 0
 	s.threshold = treshold
@@ -81,44 +83,79 @@ func(s *SkipList) findNode(key string) *SkipListNode{
 	return nil
 }
 
-func (s *SkipList) flush(filename string) bool{
-	//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	file, err := os.Create(filename)
-	if err != nil{
-		panic(err)
-	}
-	node := s.head
-	for node != nil{
-		binary.Write(file, binary.LittleEndian, node.key)
-		binary.Write(file, binary.LittleEndian, node.Value)
-		node = node.next[0]
+func (s *SkipList) flush() bool{
+	/*
+		1. Flush memtable u data folder
+		2. Brisanje walova i kreiranje jednog praznog
+		3. Kreiranje index tabele
+		4. Kreiranje summary tabele
+		5. Kreiranje bloomFiltera
+		6. Praznjenje memtable
+		7. Kreiranje TOC
+	*/
+
+	/*
+		usertable-data-ic-1-1-Data.db
+		usertable-data-ic-1-1-Filter.db
+	*/
+	/*
+		ulazimo u folder data/filter/index
+		u tom folderu ucitavamo imena fajlova
+		i gledamo koliko direktorijum ima elemenata
+		i dodamo plus 1
+	*/
+
+	filenames := readDirectory("data/")
+	var nextIndex int = len(filenames) + 1
+	baseFilename := "usertable-data-ic-" + strconv.Itoa(nextIndex) + "-1-"
+
+	dataFilename := "resources/data/" + baseFilename + "Data.db"
+	filterFilename := "resources/filter/" + baseFilename + "Filter.db"
+	indexFilename := "resources/index/" + baseFilename + "Index.db"
+	summaryFilename := "resources/summary/" + baseFilename + "Summary.db"
+	tocFilename := "resources/toc/" + baseFilename + "TOC.txt"
+	metadataFilename := "resources/data/" + baseFilename + "metadata.db"
+
+	listOfFilenames := [6]string{dataFilename, filterFilename, indexFilename, summaryFilename, tocFilename, metadataFilename}
+
+	for _, i:=range listOfFilenames{
+		file, err := os.Create(i)
+		if err != nil{
+			panic(err)
+		}
+		err = file.Close()
+		if err != nil {
+			panic(err)
+		}
+		
 	}
 
-
-	err = file.Close()
-	if err != nil {
-		return false
-	}
-
+	//file, err := os.Create(filename)
+	//if err != nil{
+	//	panic(err)
+	//}
+	//node := s.head
+	//for node != nil{
+	//	binary.Write(file, binary.LittleEndian, node.key)
+	//	binary.Write(file, binary.LittleEndian, node.Value)
+	//
+	//	node = node.next[0]
+	//}
+	//
+	//
+	//err = file.Close()
+	//if err != nil {
+	//	return false
+	//}
+	//
 	return true
 }
 
-func(s *SkipList) editNode(key string, value []byte){
-	node := s.findNode(key)
-
-	if node == nil{
-		s.addNode(key, value)
-
-	}else{
-
-		if writeData(key, value, "wal/wal_0001.log", 0) {
-			node.Value = value
-			node.ValueSize = uint64(len(node.Value))
-			if s.size == s.threshold {
-				s.flush("resources/data.txt")
-			}
-		}
-	}
+func(s *SkipList) editNode(value []byte, currentTime uint64, node *SkipListNode) bool{
+		node.Value = value
+		node.ValueSize = uint64(len(node.Value))
+		node.Timestamp = currentTime
+		return true
 }
 
 
@@ -190,8 +227,9 @@ func(s* SkipList) addFromWal(a *Data) bool{
 
 		}
 		s.size++
+
 		if s.size >= s.threshold {
-			s.flush("resources/data.txt")
+			s.flush()
 		}
 
 	}
@@ -199,23 +237,16 @@ func(s* SkipList) addFromWal(a *Data) bool{
 }
 
 
-func(s *SkipList) addNode(key string, value []byte) bool{
+func(s *SkipList) addNode(key string, value []byte, timestamp uint64) bool{
 
 	node := &SkipListNode{}
 	node.key = key
 	node.Value = value
 	node.tombstone = 0
-	//**** UKOLIKO JE WAL 1 popunjen dodati u drugi(kreiran ili kreirati ga) wal
-	file, err := os.OpenFile("wal/wal_0001.log", os.O_RDWR, 0666)
-	defer file.Close()
-	if err != nil{
-		panic(err)
-	}
+	node.Timestamp = timestamp
 
-	if appendData(file, createWalData(key, value, 0)) == nil {
-
-		current := s.head
-		previousArray := make([]*SkipListNode, s.maxHeight, s.maxHeight)
+	current := s.head
+	previousArray := make([]*SkipListNode, s.maxHeight, s.maxHeight)
 
 		// ide kroz redove i trazi elemente koji su
 		// pre naseg kljuca
@@ -255,59 +286,51 @@ func(s *SkipList) addNode(key string, value []byte) bool{
 
 			}
 			s.size++
-			if s.size >= s.threshold {
-				s.flush("resources/data.txt")
-			}
 
 			return true
 		}
-	}
-	return false
-}
-func(s *SkipList) logicalDelete(key string) bool{
 
-	nodeToDelete := s.findNode(key)
-	if nodeToDelete != nil{
-		if writeData(key, nodeToDelete.Value, "wal/wal_0001.log", 1){
-			nodeToDelete.tombstone = 1
-			return true
-		}
-	}
 	return false
 }
 
-
-func(s *SkipList) deleteNode(key string, indicator uint32) bool{
-	nodeToDelete := s.findNode(key)
-	if nodeToDelete == nil{
-		return false
-	}
-	previousArray := make([]*SkipListNode, s.maxHeight, s.maxHeight)
-
-	// ide kroz redove i trazi elemente koji su
-	// pre naseg kljuca
-	current := s.head
-	for i:=s.height;i>=0;i--{
-		for current.next[i] != nil && current.next[i].key < key{
-			current = current.next[i]
-		}
-		previousArray[i] = current
-	}
-	for i:=0;i<len(nodeToDelete.next);i++{
-		previousArray[i].next[i] = nodeToDelete.next[i]
-	}
-	for s.height > 0 && s.head.next[s.height-1]==nil{
-		s.height--
-	}
-	s.size++
-	if indicator != 0 {
-		writeData(key, nodeToDelete.Value, "wal/wal_0001.log", 1)
-	}
-	if s.size >= s.threshold{
-		s.flush("resources/data.txt")
-	}
+func(s *SkipList) logicalDelete(timestamp uint64, nodeToDelete *SkipListNode) bool{
+	nodeToDelete.tombstone = 1
+	nodeToDelete.Timestamp = timestamp
 	return true
+
 }
+
+
+//func(s *SkipList) deleteNode(key string, indicator uint32) bool{
+//	nodeToDelete := s.findNode(key)
+//	if nodeToDelete == nil{
+//		return false
+//	}
+//	previousArray := make([]*SkipListNode, s.maxHeight, s.maxHeight)
+//
+//	// ide kroz redove i trazi elemente koji su
+//	// pre naseg kljuca
+//	current := s.head
+//	for i:=s.height;i>=0;i--{
+//		for current.next[i] != nil && current.next[i].key < key{
+//			current = current.next[i]
+//		}
+//		previousArray[i] = current
+//	}
+//	for i:=0;i<len(nodeToDelete.next);i++{
+//		previousArray[i].next[i] = nodeToDelete.next[i]
+//	}
+//	for s.height > 0 && s.head.next[s.height-1]==nil{
+//		s.height--
+//	}
+//	s.size++
+//	if indicator != 0 {
+//		timeNow := uint64(time.Now().Unix())
+//		writeData(key, nodeToDelete.Value, "wal/wal_0001.log", 1, timeNow)
+//	}
+//
+//	return true
+//}
 
 func(s *SkipList) printList(){
 	fmt.Println("---------------- SKIP LISTA --------------")
