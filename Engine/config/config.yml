@@ -1,6 +1,7 @@
-memtable_size: 1
+memtable_size: 7
 wal_size: 1
-threshold: 15
+threshold: 75
+wal_threshold: 150
 cache_size: 20
 lsm_level: 4
 max_height: 5
