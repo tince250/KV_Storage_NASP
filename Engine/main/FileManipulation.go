@@ -10,44 +10,122 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
-func createFile(putanja string) *os.File{
+func createFile(putanja string) *os.File {
 	file, err := os.Create(putanja)
-	if err!=nil{
+	if err != nil {
 		panic(err)
 	}
+	file.Close()
 	return file
 }
 func deleteFile(putanja string) {
 
 	err := os.Remove(putanja)
-	if err!=nil{
+	if err != nil {
 		panic(err)
 	}
 }
 
-func setNewFilenameBasedOnOffsets(offsets []string) string{
+func resetWal(directoryName string) bool {
+
+	deleteDirectory(directoryName)
+	createFile(directoryName + "wal_0001.log")
+	return true
+}
+
+func deleteDirectory(directoryName string) bool {
+	filenames := readDirectory(directoryName)
+	for _, i := range filenames {
+		deleteFile(i)
+	}
+	return true
+}
+
+func getFileIndex(filename string) (prvi string, drugi string) {
+	//usertable-data-ic-1-1-Filter.db
+	dashCounter := 0
+	prvi = ""
+	drugi = ""
+
+	for i := 0; i < len(filename); i++ {
+		if dashCounter == 3 {
+			prvi += string(filename[i])
+		}
+		if dashCounter == 4 {
+			drugi += string(filename[i])
+		}
+		if filename[i] == '-' {
+			dashCounter++
+		}
+
+	}
+	prvi = prvi[:len(prvi)-1]
+	drugi = drugi[:len(drugi)-1]
+	return
+}
+
+func getCreationTime(filename string) time.Time {
+	finfo, _ := os.Stat(filename)
+
+	d := finfo.Sys().(*syscall.Win32FileAttributeData)
+	cTime := time.Unix(0, d.CreationTime.Nanoseconds())
+	return cTime
+
+}
+
+func sortByCreationTime(filenames []string) []string {
+	swap := reflect.Swapper(filenames)
+
+	for i := 0; i < len(filenames); i++ {
+		for j := i; j < len(filenames); j++ {
+			if getCreationTime(filenames[i]).Before(getCreationTime(filenames[j])) {
+				swap(i, j)
+			}
+		}
+	}
+
+	return filenames
+}
+
+func getByGeneration(filenames []string, index uint64) []string {
+	names := make([]string, 0)
+	for i := 0; i < len(filenames); i++ {
+		_, drugi := getFileIndex(filenames[i])
+		if drugi == strconv.FormatUint(index, 10) {
+			names = append(names, filenames[i])
+
+		}
+
+	}
+	return names
+
+}
+
+func setNewFilenameBasedOnOffsets(offsets []string) string {
 	newFilename := "wal/wal_"
-	if len(offsets) == 0{
+	if len(offsets) == 0 {
 		newFilename += "0001.log"
 		return newFilename
 	}
-	last_offset := offsets[len(offsets) - 1]
+	last_offset := offsets[len(offsets)-1]
 	intOffset, err := strconv.Atoi(last_offset)
-	if err != nil{
+	if err != nil {
 		panic(err)
 	}
 	if intOffset < 9 {
 		newFilename += "000" + strconv.Itoa(intOffset+1)
-	}else if intOffset < 99 {
+	} else if intOffset < 99 {
 		newFilename += "00" + strconv.Itoa(intOffset+1)
-	}else if intOffset < 999{
+	} else if intOffset < 999 {
 		newFilename += "0" + strconv.Itoa(intOffset+1)
-	}else{
+	} else {
 		newFilename += strconv.Itoa(intOffset + 1)
 	}
 	newFilename += ".log"
@@ -55,41 +133,41 @@ func setNewFilenameBasedOnOffsets(offsets []string) string{
 	return newFilename
 }
 
-func deleteAndRenameOldLogsUntilLast(filenames []string) bool{
-	for i:=0;i<len(filenames) - 1;i++{
+func deleteAndRenameOldLogsUntilLast(filenames []string) bool {
+	for i := 0; i < len(filenames)-1; i++ {
 		deleteFile(filenames[i])
 	}
 	new_filenames := readDirectory("wal/")
-	for i:=0;i<len(new_filenames);i++{
+	for i := 0; i < len(new_filenames); i++ {
 		renameFile(new_filenames[i], basedOnIndexFilename(i))
 	}
 	return true
 }
 
-func deleteAndRenameOldLogs(limit string) bool{
+func deleteAndRenameOldLogs(limit string) bool {
 	fileNames := readDirectory("wal/")
 	offsets := splitOffests(fileNames)
-	for i:=0;i<len(offsets);i++{
-		if offsets[i] < limit{
+	for i := 0; i < len(offsets); i++ {
+		if offsets[i] < limit {
 			deleteFile(fileNames[i])
 		}
 	}
 	new_filenames := readDirectory("wal/")
-	for i:=0;i<len(new_filenames);i++{
+	for i := 0; i < len(new_filenames); i++ {
 		renameFile(new_filenames[i], basedOnIndexFilename(i))
 	}
 	return true
 }
 
-func basedOnIndexFilename(index int) string{
-	filename:= "wal/wal_"
+func basedOnIndexFilename(index int) string {
+	filename := "wal/wal_"
 	if index < 10 {
 		filename += "000" + strconv.Itoa(index+1)
-	}else if index < 100{
+	} else if index < 100 {
 		filename += "00" + strconv.Itoa(index+1)
-	}else if index < 1000{
+	} else if index < 1000 {
 		filename += "0" + strconv.Itoa(index+1)
-	}else{
+	} else {
 		filename += strconv.Itoa(index + 1)
 	}
 	filename += ".log"
@@ -97,23 +175,23 @@ func basedOnIndexFilename(index int) string{
 	return filename
 }
 
-func existsFile(putanja string) bool{
-	if _, err := os.Stat(putanja);err!=nil{
-		if os.IsNotExist(err){
+func existsFile(putanja string) bool {
+	if _, err := os.Stat(putanja); err != nil {
+		if os.IsNotExist(err) {
 			return false
 		}
 	}
 	return true
 }
-func renameFile(filename, newName string){
-	err:= os.Rename(filename, newName)
-	if err!=nil{
+func renameFile(filename, newName string) {
+	err := os.Rename(filename, newName)
+	if err != nil {
 		panic(err)
 	}
 }
-func fileInfo(putanja string){
+func fileInfo(putanja string) {
 	file, err := os.Stat(putanja)
-	if err !=nil{
+	if err != nil {
 		panic(err)
 	}
 	fmt.Println("Name: ", file.Name())
@@ -123,62 +201,60 @@ func fileInfo(putanja string){
 	fmt.Println("Is directory? ", file.IsDir())
 }
 
-func copyToFile(path1, path2 string){
+func copyToFile(path1, path2 string) {
 	original, err := os.Open(path1)
-	if err!= nil{
+	if err != nil {
 		log.Fatal(err)
 	}
 
 	newFile, err := os.OpenFile(path2, os.O_WRONLY, 0666)
 
-	if err!=nil{
+	if err != nil {
 		log.Fatal(err)
 	}
 
-
 	bytesWritten, err := io.Copy(newFile, original)
-	if err !=nil{
+	if err != nil {
 		log.Fatal(err)
 	}
 	log.Printf("Copied %d bytes", bytesWritten)
 	err = newFile.Sync()
-	if err != nil{
+	if err != nil {
 		log.Fatal(err)
 	}
 	original.Close()
 	newFile.Close()
 }
 
-func readToStringFromFile(putanja string) []string{
+func readToStringFromFile(putanja string) []string {
 	file, err := os.Open(putanja)
-	if err != nil{
+	if err != nil {
 		panic(err)
 	}
 	lines := make([]string, 0)
 	scanner := bufio.NewScanner(file)
 
-	for scanner.Scan(){
-		line:= scanner.Text()
+	for scanner.Scan() {
+		line := scanner.Text()
 		lines = append(lines, line)
 	}
-
 
 	file.Close()
 	return lines
 }
 
-func splitOffests(filenames []string) []string{
+func splitOffests(filenames []string) []string {
 	// vraca samo offsete 0001, 0002..
 	offsets := make([]string, len(filenames))
-	for i, j:= range filenames{
-		s:= strings.Split(j, "_")
+	for i, j := range filenames {
+		s := strings.Split(j, "_")
 		finalSplit := strings.Split(s[1], ".")
 		offsets[i] = finalSplit[0]
 	}
 	return offsets
 }
 
-func readDirectory(putanja string) []string{
+func readDirectory(putanja string) []string {
 	if _, err := os.Stat(putanja); os.IsNotExist(err) {
 		if err := os.Mkdir(putanja, os.ModePerm); err != nil {
 			log.Fatal(err)
@@ -189,20 +265,61 @@ func readDirectory(putanja string) []string{
 		return nil
 	}
 	fileNames := make([]string, len(files))
-	for i:=0;i<len(files);i++{
+	for i := 0; i < len(files); i++ {
 		fileNames[i] = putanja + "" + files[i].Name()
 	}
 	return fileNames
 }
 
-func createWalData(key string, value []byte, tombstone byte) []byte{
+func createHeaderData(key string) []byte {
+	dataToReturn := make([]byte, 0)
 
-	crcByte:= make([]byte, 4)
+	keyLength := make([]byte, 8)
+	binary.LittleEndian.PutUint64(keyLength, uint64(len(key)))
+
+	dataToReturn = append(dataToReturn, keyLength...)
+	dataToReturn = append(dataToReturn, []byte(key)...)
+
+	return dataToReturn
+
+}
+
+func createIndexData(key string, pointerPosition uint64) []byte {
+
+	keyLength := make([]byte, 8)
+	binary.LittleEndian.PutUint64(keyLength, uint64(len(key)))
+
+	// 8B za kljuc
+	// 8B za poziciju
+
+	dataToReturn := make([]byte, 0)
+
+	// dodavanje duzina kljuca i pokazivaca
+	dataToReturn = append(dataToReturn, keyLength...)
+	//dataToReturn = append(dataToReturn, pointerPositionLength...)
+
+	// dodavanje kljuca
+	dataToReturn = append(dataToReturn, []byte(key)...)
+
+	// dodavanje pokazivaca
+	//pointerPositionArr := make([]byte, 8)
+	//binary.LittleEndian.PutUint64(pointerPositionArr, pointerPosition)
+	bs := make([]byte, 8)
+	// 0000007
+	binary.LittleEndian.PutUint64(bs, pointerPosition)
+	dataToReturn = append(dataToReturn, bs...)
+
+	return dataToReturn
+
+}
+
+func createWalData(key string, value []byte, tombstone byte, timestamp uint64) []byte {
+
+	crcByte := make([]byte, 4)
 	binary.LittleEndian.PutUint32(crcByte, CRC32(value))
 
-	timeNow := time.Now().Unix()
 	timeNowByte := make([]byte, 8)
-	binary.LittleEndian.PutUint64(timeNowByte, uint64(timeNow))
+	binary.LittleEndian.PutUint64(timeNowByte, timestamp)
 
 	tsByte := make([]byte, 0)
 	tsByte = append(tsByte, tombstone)
@@ -226,7 +343,6 @@ func createWalData(key string, value []byte, tombstone byte) []byte{
 
 }
 
-
 func appendData(file *os.File, data []byte) error {
 	currentLen, err := fileLen(file)
 	if err != nil {
@@ -235,7 +351,6 @@ func appendData(file *os.File, data []byte) error {
 
 	mmapf, err := mmap.MapRegion(file, int(currentLen)+len(data), mmap.RDWR, 0, 0)
 	if err != nil {
-
 		return err
 	}
 
