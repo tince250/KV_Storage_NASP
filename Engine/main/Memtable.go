@@ -14,6 +14,17 @@ type Memtable struct{
 	walThreshold uint64
 }
 
+func(memtable *Memtable) initMemtableWithPassedValues(memtableSize, threshold, walThreshold, maxHeight uint64) bool{
+	memtable.memtableSize =memtableSize
+	memtable.threshold = threshold
+	memtable.currentSize = 0
+	memtable.skiplist.createSkipList(maxHeight, memtable.threshold, walThreshold)
+	memtable.walThreshold = walThreshold
+	a := readFullData("wal/")
+	memtable.reconstructWal(a)
+	return true
+}
+
 func(memtable *Memtable) initMemtable() bool{
 
 	defVals := &defValues{}
@@ -27,6 +38,8 @@ func(memtable *Memtable) initMemtable() bool{
 	memtable.reconstructWal(a)
 	return true
 }
+
+
 
 func(memtable *Memtable) reconstructWal(walData []*Data) bool{
 
@@ -61,7 +74,11 @@ func(memtable *Memtable) flush() bool{
 	filenames := readDirectory("resources/data")
 	var nextIndex int = len(filenames) + 1
 	baseFilename := "usertable-data-ic-" + strconv.Itoa(nextIndex) + "-1-"
-
+	/*
+			TODO:
+			2-1
+		    1-2
+	*/
 	dataFilename := "resources/data/" + baseFilename + "Data.db"
 	filterFilename := "resources/filter/" + baseFilename + "Filter.db"
 	indexFilename := "resources/index/" + baseFilename + "Index.db"
@@ -221,7 +238,15 @@ func(memtable *Memtable) insertToMemtable(key string, value []byte, indicator in
 				indicator = 0
 
 			} else
-			{return false }
+			{
+				node = memtable.skiplist.addNode(key, value, uint64(time.Now().Unix()))
+			}
+		}
+	}else{
+		node = memtable.skiplist.findNode(key)
+		if node != nil{
+			indicator = 1
+
 		}
 	}
 	filenames := readDirectory("wal/")
@@ -268,10 +293,6 @@ func(memtable *Memtable) insertToMemtable(key string, value []byte, indicator in
 	if float64(memtable.currentSize) > float64((memtable.threshold * memtable.memtableSize)/100.0){
 		memtable.flush()
 
-		/*
-			Isprazniti memtable
-			Wal izbrisati i kreirati novi
-		*/
 		resetWal("wal/")
 		maxHeight := memtable.skiplist.maxHeight
 		walThreshold := memtable.skiplist.walThreshold
