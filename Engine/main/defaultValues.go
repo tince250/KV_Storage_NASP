@@ -9,10 +9,10 @@ type defValues struct{
 	MemtableSize uint64 `yaml:"memtable_size"`
 	WalSize uint64		`yaml:"wal_size"`
 	Threshold uint64	`yaml:"threshold"`
-	CacheSize uint64	`yaml:"cache_size"`
+	CacheSize uint32	`yaml:"cache_size"`
 	LsmLevel uint64 	`yaml:"lsm_level"`
 	MaxHeight uint64	`yaml:"max_height"`
-
+	WalThreshold uint64	`yaml:"wal_threshold"`
 }
 
 func (defVals *defValues) getDefaultValues(filename string) {
@@ -24,6 +24,7 @@ func (defVals *defValues) getDefaultValues(filename string) {
 		defVals.CacheSize = 20
 		defVals.LsmLevel = 4
 		defVals.MaxHeight = 5
+		defVals.WalThreshold = 300
 	}else{
 		// ukoliko postoji fajl, postaviti vrednosti iz fajla
 		err := yaml.Unmarshal(configData, &defVals)
@@ -34,8 +35,9 @@ func (defVals *defValues) getDefaultValues(filename string) {
 			defVals.CacheSize = 20
 			defVals.LsmLevel = 4
 			defVals.MaxHeight = 5
+			defVals.WalThreshold = 300
 		}
 	}
-	
+
 }
 
