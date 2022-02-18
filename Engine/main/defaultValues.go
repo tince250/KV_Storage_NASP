@@ -36,11 +36,6 @@ func (defVals *defValues) getDefaultValues(filename string) {
 			defVals.MaxHeight = 5
 		}
 	}
-	//fmt.Println(defVals.WalSize)
-	//fmt.Println(defVals.MemtableSize)
-	//fmt.Println(defVals.Threshold)
-	//fmt.Println(defVals.CacheSize)
-	//fmt.Println(defVals.LsmLevel)
-	//fmt.Println(defVals.MaxHeight)
+	
 }
 
