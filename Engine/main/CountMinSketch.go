@@ -12,11 +12,19 @@ import (
 
 type CountMinSketch struct{
 	M uint
-	K uint
-	HashFunctions []hash.Hash32
-	Timestamp []uint32
+	K uint32
 	Table [][]uint
+	Timestamp []uint32
+	HashFunctions []hash.Hash32
 
+}
+
+func(cms *CountMinSketch) initializeCountMinSketch(epsilon, delta float64) bool{
+	cms.M = CalculateMCMS(epsilon)
+	cms.K = CalculateKCMS(delta)
+	cms.HashFunctions, cms.Timestamp = CreateHashFunctionsCMS(cms.K)
+	cms.createTable()
+	return true
 }
 
 func(cms *CountMinSketch) createTable(){
@@ -42,6 +50,7 @@ func(cms *CountMinSketch) serializeCMS(filename string) bool{
 	err = encoder.Encode(cms.M)
 	err = encoder.Encode(cms.K)
 	err = encoder.Encode(cms.Table)
+	err = encoder.Encode(cms.Timestamp)
 	for i:=0;i<len(cms.HashFunctions);i++{
 		err = encoder.Encode(cms.HashFunctions[i])
 		if err != nil{
@@ -65,10 +74,11 @@ func(cms *CountMinSketch) deserializeCMS(filename string) bool{
 	decoder := gob.NewDecoder(file)
 	err = decoder.Decode(&cms.M)
 	err = decoder.Decode(&cms.K)
-
 	err = decoder.Decode(&cms.Table)
+	err = decoder.Decode(&cms.Timestamp)
 
-	for i:= uint(0);i<cms.K;i++{
+	for i:= uint32(0);i<cms.K;i++{
+
 		h := murmur3.New32WithSeed(cms.Timestamp[i])
 		err = decoder.Decode(h)
 		cms.HashFunctions = append(cms.HashFunctions, h)
@@ -121,8 +131,8 @@ func CalculateMCMS(epsilon float64) uint {
 	return uint(math.Ceil(math.E / epsilon))
 }
 
-func CalculateKCMS(delta float64) uint {
-	return uint(math.Ceil(math.Log(math.E / delta)))
+func CalculateKCMS(delta float64) uint32 {
+	return uint32(math.Ceil(math.Log(math.E / delta)))
 }
 
 func CreateHashFunctionsCMS(k uint32) ([]hash.Hash32, []uint32) {
