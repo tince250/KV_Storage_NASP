@@ -51,6 +51,7 @@ func deleteDirectory(directoryName string) bool {
 func getFileIndex(filename string) (prvi string, drugi string) {
 	//usertable-data-ic-1-1-Filter.db
 	dashCounter := 0
+
 	prvi = ""
 	drugi = ""
 
@@ -68,6 +69,7 @@ func getFileIndex(filename string) (prvi string, drugi string) {
 	}
 	prvi = prvi[:len(prvi)-1]
 	drugi = drugi[:len(drugi)-1]
+
 	return
 }
 

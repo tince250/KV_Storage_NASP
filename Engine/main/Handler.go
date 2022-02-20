@@ -13,12 +13,12 @@ import (
 1.uzimamo broj datoteka svake generacije, posle svake kompakcije krecemo od prve ponovo
 2.radimo po dogovorenom algoritmu
 */
-func compact() bool {
+func compact(maxLSMLevel uint64, maxTablesPerLevel int) bool {
 	i := uint64(1)
-	for i < 5 {
+	for i < maxLSMLevel {
 		filenames := readDirectory("resources/data/")
 		genFilenames := getByGeneration(filenames, i)
-		if len(genFilenames) >= 2 {
+		if len(genFilenames) > maxTablesPerLevel {
 			index := i + uint64(1)
 			gen2Filenames := getByGeneration(filenames, index)
 			var nextFileIndex uint64
@@ -42,6 +42,50 @@ func compact() bool {
 	return true
 }
 
+func createListOfFilenames(newLevel int, nextFileIndex int) [6]string {
+
+	baseFilename := "usertable-data-ic-" + strconv.Itoa(nextFileIndex) + "-" + strconv.Itoa(newLevel) + "-"
+
+	dataFilename := "resources/data/" + baseFilename + "Data.db"
+	filterFilename := "resources/filter/" + baseFilename + "Filter.db"
+	indexFilename := "resources/index/" + baseFilename + "Index.db"
+	summaryFilename := "resources/summary/" + baseFilename + "Summary.db"
+	tocFilename := "resources/toc/" + baseFilename + "TOC.txt"
+	metadataFilename := "resources/metadata/" + baseFilename + "metadata.db"
+
+	listOfNames := [6]string{dataFilename, filterFilename, indexFilename, summaryFilename, tocFilename, metadataFilename}
+
+	return listOfNames
+}
+
+func deleteSSTable(listOfNames [6]string) bool {
+
+	for i := 0; i < len(listOfNames); i++ {
+		err := os.Remove(listOfNames[i])
+		if err != nil {
+			return false
+		}
+	}
+	return true
+}
+
+func addToData(dataFile *os.File, node *Data) (indexPosition uint64) {
+	data := createWalData(node.key, node.value, node.ts, node.timeStamp)
+	appendData(dataFile, data)
+	indexPosition = uint64(len(data))
+
+	return
+}
+
+func addToIndex(indexFile *os.File, dataPosition uint64, key string) bool {
+
+	indexData := createIndexData(key, dataPosition)
+	appendData(indexFile, indexData)
+
+	return true
+
+}
+
 func mergeFiles(first string, second string, newLevel uint64, nextFileIndex uint64) {
 
 	file1, err := os.OpenFile(first, os.O_RDONLY, 0777)
@@ -57,33 +101,98 @@ func mergeFiles(first string, second string, newLevel uint64, nextFileIndex uint
 		panic(err)
 	}
 
+	nextFileIndexInt := int(nextFileIndex)
+	newLevelInt := int(newLevel)
+
+	listOfFilenames := createListOfFilenames(newLevelInt, nextFileIndexInt)
+
+	for _, i := range listOfFilenames {
+		file, err := os.Create(i)
+		if err != nil {
+			panic(err)
+		}
+		file.Close()
+	}
+	fileData, err := os.OpenFile(listOfFilenames[0], os.O_RDWR, 0777)
+
+	if err != nil {
+		panic(err)
+	}
+	defer fileData.Close()
+
+	fileIndex, err := os.OpenFile(listOfFilenames[2], os.O_RDWR, 0777)
+
+	if err != nil {
+		panic(err)
+	}
+	defer fileIndex.Close()
+
 	index1 := uint64(0)
 	index2 := uint64(0)
 	node1 := readRecord(file1, index1)
 	node2 := readRecord(file2, index2)
 
+	var firstKey string = ""
+	var firstKeyIndicator byte = 0
+	var lastKey string = ""
+	var filterSize int = 0
+	currentPosition := uint64(0)
+	listOfValues := make([][]byte, 0)
+
 	for node1 != nil && node2 != nil {
 		if node1.key < node2.key {
 			if node1.ts != 1 {
-				nodes = append(nodes, node1)
+				indexPosition := addToData(fileData, node1)
+				addToIndex(fileIndex, currentPosition, node1.key)
+				listOfValues = append(listOfValues, node1.value)
+				currentPosition = indexPosition
+				filterSize++
+				if firstKeyIndicator == 0 {
+					firstKey = node1.key
+					firstKeyIndicator = 1
+				}
 			}
 			node1 = readRecord(file1, index1)
 
 		} else if node1.key > node2.key {
 			if node2.ts != 1 {
-				nodes = append(nodes, node2)
+				indexPosition := addToData(fileData, node2)
+				addToIndex(fileIndex, currentPosition, node2.key)
+				listOfValues = append(listOfValues, node2.value)
+				currentPosition = indexPosition
+				filterSize++
+				if firstKeyIndicator == 0 {
+					firstKey = node2.key
+					firstKeyIndicator = 1
+				}
 			}
 			node2 = readRecord(file2, index2)
 
 		} else {
 			if node1.timeStamp < node2.timeStamp {
 				if node2.ts != 1 {
-					nodes = append(nodes, node2)
+					indexPosition := addToData(fileData, node2)
+					addToIndex(fileIndex, currentPosition, node2.key)
+					listOfValues = append(listOfValues, node2.value)
+					currentPosition = indexPosition
+					filterSize++
+					if firstKeyIndicator == 0 {
+						firstKey = node2.key
+						firstKeyIndicator = 1
+					}
 				}
 
 			} else {
 				if node1.ts != 1 {
-					nodes = append(nodes, node1)
+					indexPosition := addToData(fileData, node1)
+					addToIndex(fileIndex, currentPosition, node1.key)
+					listOfValues = append(listOfValues, node1.value)
+					currentPosition = indexPosition
+					filterSize++
+					if firstKeyIndicator == 0 {
+						firstKey = node1.key
+						firstKeyIndicator = 1
+					}
 				}
 			}
 			node2 = readRecord(file2, index2)
@@ -91,27 +200,80 @@ func mergeFiles(first string, second string, newLevel uint64, nextFileIndex uint
 		}
 
 	}
+
+	//bloomfilter:= &BloomFilter{}
+	//bloomfilter.initializeBloomFilter(,0.4)
+
 	if node1 == nil {
 		//nastavi node2
 		for node2 != nil {
-			nodes = append(nodes, node2)
+			if node2.ts != 1 {
+				indexPosition := addToData(fileData, node2)
+				addToIndex(fileIndex, currentPosition, node2.key)
+				listOfValues = append(listOfValues, node2.value)
+				currentPosition = indexPosition
+				filterSize++
+				lastKey = node2.key
+			}
 			node2 = readRecord(file2, index2)
 		}
 	} else if node2 == nil {
 		for node1 != nil {
-			nodes = append(nodes, node1)
+			if node1.ts != 1 {
+				indexPosition := addToData(fileData, node1)
+				addToIndex(fileIndex, currentPosition, node1.key)
+				listOfValues = append(listOfValues, node1.value)
+				currentPosition = indexPosition
+				filterSize++
+				lastKey = node1.key
+			}
 			node1 = readRecord(file1, index1)
 		}
 	}
-	for i := 0; i < len(nodes); i++ {
-		fmt.Printf(" ")
-		fmt.Printf(nodes[i].key)
-	}
+
 	fmt.Println(" ")
 	file1.Close()
 	file2.Close()
-	deleteFile(first)
-	deleteFile(second)
+
+	fileSummary, err := os.OpenFile(listOfFilenames[3], os.O_RDWR, 0777)
+	if err != nil {
+		panic(err)
+	}
+	defer fileSummary.Close()
+
+	fileIndex.Seek(0, 0)
+
+	startIndex := createHeaderData(firstKey)
+	endIndex := createHeaderData(lastKey)
+	appendData(fileSummary, startIndex)
+	appendData(fileSummary, endIndex)
+
+	bf := &BloomFilter{}
+	bf.initializeBloomFilter(filterSize, 0.4)
+	currentPosition = 0
+	key, summaryIndex := readIndexRecord(fileIndex)
+
+	for key != "" && summaryIndex != 0 {
+		summaryData := createIndexData(key, currentPosition)
+		appendData(fileSummary, summaryData)
+
+		currentPosition = summaryIndex
+	}
+
+	// brisemo stare fajlove
+	firstIndex, firstLevel := getFileIndex(first)
+	firstIndexInt, _ := strconv.ParseInt(firstIndex, 10, 32)
+	firstLevelInt, _ := strconv.ParseInt(firstLevel, 10, 32)
+
+	listOfFilenamesFirst := createListOfFilenames(int(firstLevelInt), int(firstIndexInt))
+
+	secondIndex, secondLevel := getFileIndex(second)
+	secondIndexInt, _ := strconv.ParseInt(secondIndex, 10, 32)
+	secondLevelInt, _ := strconv.ParseInt(secondLevel, 10, 32)
+	listOfFilenamesSecond := createListOfFilenames(int(secondLevelInt), int(secondIndexInt))
+
+	deleteSSTable(listOfFilenamesFirst)
+	deleteSSTable(listOfFilenamesSecond)
 
 	//otvorimo ova fajla
 	//uzmemo prvih 29 bitova iz oba
@@ -246,7 +408,27 @@ func checkFilters(filenames []string, key string) *dllNode {
 
 	return nil
 }
+func readIndexRecord(file *os.File) (key string, indexPosition uint64) {
 
+	keyLengthBytes := make([]byte, 8)
+	_, err := file.Read(keyLengthBytes)
+	if err != nil {
+		if err == io.EOF {
+			return "", 0
+		}
+	}
+	keyLength := binary.LittleEndian.Uint64(keyLengthBytes)
+
+	keyData := make([]byte, keyLength)
+	_, err = file.Read(keyData)
+	key = string(keyData)
+
+	pointerData := make([]byte, 8)
+	_, err = file.Read(pointerData)
+	indexPosition = 16 + keyLength
+
+	return
+}
 func readRecord(file *os.File, indexFilePosition uint64) *Data {
 
 	offset := int64(0)
