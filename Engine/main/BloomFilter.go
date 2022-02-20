@@ -2,9 +2,9 @@ package main
 
 import (
 	"encoding/gob"
+	"fmt"
 	"github.com/spaolacci/murmur3"
 	"hash"
-	"io"
 	"math"
 	"os"
 	"time"
@@ -12,9 +12,9 @@ import (
 
 type BloomFilter struct{
 	M uint
-	K uint32
-	BitSet []int
-	Timestamp []uint32
+	K uint
+	BitSet []byte
+	Timestamp uint
 	HashFunctions []hash.Hash32
 
 }
@@ -22,13 +22,13 @@ type BloomFilter struct{
 func(bf *BloomFilter) initializeBloomFilter(expectedElements int, falsePositiveRate float64) bool{
 	bf.M = CalculateM(expectedElements, falsePositiveRate)
 	bf.K = CalculateK(expectedElements, bf.M)
-	bf.HashFunctions, bf.Timestamp = CreateHashFunctions(bf.K)
+	bf.HashFunctions, bf.Timestamp = CreateHashFunctions(bf.K, 0)
 	bf.createBitSet()
 	return true
 }
 
 func(bf *BloomFilter) createBitSet(){
-	bf.BitSet = make([]int, bf.M, bf.M)
+	bf.BitSet = make([]byte, bf.M, bf.M)
 }
 
 func(bf *BloomFilter) addElement(element []byte){
@@ -64,24 +64,31 @@ func (bf *BloomFilter)decodeFilter(filename string){
 		panic(err)
 	}
 
+	//decoder := gob.NewDecoder(file)
+	//err = decoder.Decode(&bf.M)
+	//err = decoder.Decode(&bf.K)
+	//
+	//err = decoder.Decode(&bf.BitSet)
+	//err = decoder.Decode(&bf.Timestamp)
+	//
+	//
+	//for i:= uint(0);i<bf.K;i++{
+	//	h := murmur3.New32WithSeed(bf.Timestamp[i])
+	//
+	//	err = decoder.Decode(h)
+	//	bf.HashFunctions = append(bf.HashFunctions, h)
+	//	if err != nil && err != io.EOF{
+	//		panic(err)
+	//	}
+	//}
+	//
+	//err = file.Close()
 	decoder := gob.NewDecoder(file)
-	err = decoder.Decode(&bf.M)
-	err = decoder.Decode(&bf.K)
-
-	err = decoder.Decode(&bf.BitSet)
-	err = decoder.Decode(&bf.Timestamp)
-
-
-	for i:= uint32(0);i<bf.K;i++{
-		h := murmur3.New32WithSeed(bf.Timestamp[i])
-
-		err = decoder.Decode(h)
-		bf.HashFunctions = append(bf.HashFunctions, h)
-		if err != nil && err != io.EOF{
-			panic(err)
-		}
+	err = decoder.Decode(&bf)
+	if err != nil {
+		fmt.Println(err)
 	}
-
+	bf.HashFunctions, _ = CreateHashFunctions(bf.K, bf.Timestamp)
 	err = file.Close()
 	if err != nil {
 		panic(err)
@@ -90,26 +97,17 @@ func (bf *BloomFilter)decodeFilter(filename string){
 
 
 func(bf *BloomFilter) encodeFilter(filename string) bool{
+	bf.HashFunctions = nil
 	file, err := os.Create(filename)
 	if err != nil{
 		return false
 	}
-
 	encoder := gob.NewEncoder(file)
-	err = encoder.Encode(bf.M)
-	err = encoder.Encode(bf.K)
-	err = encoder.Encode(bf.BitSet)
-	err = encoder.Encode(bf.Timestamp)
-	for i:=0;i<len(bf.HashFunctions);i++{
-		err = encoder.Encode(bf.HashFunctions[i])
-		if err != nil{
-			return false
-		}
+	err = encoder.Encode(bf)
+	if err != nil {
+		panic(err)
 	}
 	err = file.Close()
-	if err != nil{
-		return false
-	}
 	return true
 
 }
@@ -118,17 +116,17 @@ func CalculateM(expectedElements int, falsePositiveRate float64) uint {
 	return uint(math.Ceil(float64(expectedElements) * math.Abs(math.Log(falsePositiveRate)) / math.Pow(math.Log(2), float64(2))))
 }
 
-func CalculateK(expectedElements int, m uint) uint32 {
-	return uint32(math.Ceil((float64(m) / float64(expectedElements)) * math.Log(2)))
+func CalculateK(expectedElements int, m uint) uint {
+	return uint(math.Ceil((float64(m) / float64(expectedElements)) * math.Log(2)))
 }
 
-func CreateHashFunctions(k uint32) ([]hash.Hash32, []uint32) {
+func CreateHashFunctions(k uint, t uint) ([]hash.Hash32, uint) {
 	h := []hash.Hash32{}
-	timestamp := []uint32{}
-	ts := uint32(time.Now().Unix())
-	for i := uint32(0); i < k; i++ {
-		timestamp = append(timestamp, ts + i)
-		h = append(h, murmur3.New32WithSeed(ts+i))
+	if t == 0 {
+		t = uint(time.Now().Unix())
 	}
-	return h, timestamp
+	for i := uint(0); i < k; i++ {
+		h = append(h, murmur3.New32WithSeed(uint32(t+i)))
+	}
+	return h, t
 }
