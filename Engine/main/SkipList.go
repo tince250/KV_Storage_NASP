@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"math/rand"
-	"os"
-	"strconv"
 )
 
 
@@ -43,16 +41,6 @@ type SkipListNode struct {
 	next      []*SkipListNode
 }
 
-//func(s *SkipList) emptySkiplList(node *SkipListNode) {
-//	if node == nil{
-//		s.size--
-//		return
-//	}
-//	s.emptySkiplList(node.next[0])
-//	s.deleteNode(node.key, 0)
-//	s.size = 0
-//}
-
 func (s *SkipList) createSkipList(maxHeight uint64, treshold uint64, walThreshold uint64){
 	s.maxHeight = maxHeight
 	s.head = &SkipListNode{}
@@ -83,73 +71,6 @@ func(s *SkipList) findNode(key string) *SkipListNode{
 	return nil
 }
 
-func (s *SkipList) flush() bool{
-	/*
-		1. Flush memtable u data folder
-		2. Brisanje walova i kreiranje jednog praznog
-		3. Kreiranje index tabele
-		4. Kreiranje summary tabele
-		5. Kreiranje bloomFiltera
-		6. Praznjenje memtable
-		7. Kreiranje TOC
-	*/
-
-	/*
-		usertable-data-ic-1-1-Data.db
-		usertable-data-ic-1-1-Filter.db
-	*/
-	/*
-		ulazimo u folder data/filter/index
-		u tom folderu ucitavamo imena fajlova
-		i gledamo koliko direktorijum ima elemenata
-		i dodamo plus 1
-	*/
-
-	filenames := readDirectory("data/")
-	var nextIndex int = len(filenames) + 1
-	baseFilename := "usertable-data-ic-" + strconv.Itoa(nextIndex) + "-1-"
-
-	dataFilename := "resources/data/" + baseFilename + "Data.db"
-	filterFilename := "resources/filter/" + baseFilename + "Filter.db"
-	indexFilename := "resources/index/" + baseFilename + "Index.db"
-	summaryFilename := "resources/summary/" + baseFilename + "Summary.db"
-	tocFilename := "resources/toc/" + baseFilename + "TOC.txt"
-	metadataFilename := "resources/data/" + baseFilename + "metadata.db"
-
-	listOfFilenames := [6]string{dataFilename, filterFilename, indexFilename, summaryFilename, tocFilename, metadataFilename}
-
-	for _, i:=range listOfFilenames{
-		file, err := os.Create(i)
-		if err != nil{
-			panic(err)
-		}
-		err = file.Close()
-		if err != nil {
-			panic(err)
-		}
-		
-	}
-
-	//file, err := os.Create(filename)
-	//if err != nil{
-	//	panic(err)
-	//}
-	//node := s.head
-	//for node != nil{
-	//	binary.Write(file, binary.LittleEndian, node.key)
-	//	binary.Write(file, binary.LittleEndian, node.Value)
-	//
-	//	node = node.next[0]
-	//}
-	//
-	//
-	//err = file.Close()
-	//if err != nil {
-	//	return false
-	//}
-	//
-	return true
-}
 
 func(s *SkipList) editNode(value []byte, currentTime uint64, node *SkipListNode) bool{
 		node.Value = value
@@ -157,8 +78,6 @@ func(s *SkipList) editNode(value []byte, currentTime uint64, node *SkipListNode)
 		node.Timestamp = currentTime
 		return true
 }
-
-
 
 func(s *SkipList) inserFromWal(a []*Data) bool{
 	for i:=0;i<len(a);i++{
@@ -228,16 +147,12 @@ func(s* SkipList) addFromWal(a *Data) bool{
 		}
 		s.size++
 
-		if s.size >= s.threshold {
-			s.flush()
-		}
-
 	}
 	return true
 }
 
 
-func(s *SkipList) addNode(key string, value []byte, timestamp uint64) bool{
+func(s *SkipList) addNode(key string, value []byte, timestamp uint64) *SkipListNode{
 
 	node := &SkipListNode{}
 	node.key = key
@@ -287,10 +202,10 @@ func(s *SkipList) addNode(key string, value []byte, timestamp uint64) bool{
 			}
 			s.size++
 
-			return true
+			return node
 		}
 
-	return false
+	return nil
 }
 
 func(s *SkipList) logicalDelete(timestamp uint64, nodeToDelete *SkipListNode) bool{
@@ -299,38 +214,6 @@ func(s *SkipList) logicalDelete(timestamp uint64, nodeToDelete *SkipListNode) bo
 	return true
 
 }
-
-
-//func(s *SkipList) deleteNode(key string, indicator uint32) bool{
-//	nodeToDelete := s.findNode(key)
-//	if nodeToDelete == nil{
-//		return false
-//	}
-//	previousArray := make([]*SkipListNode, s.maxHeight, s.maxHeight)
-//
-//	// ide kroz redove i trazi elemente koji su
-//	// pre naseg kljuca
-//	current := s.head
-//	for i:=s.height;i>=0;i--{
-//		for current.next[i] != nil && current.next[i].key < key{
-//			current = current.next[i]
-//		}
-//		previousArray[i] = current
-//	}
-//	for i:=0;i<len(nodeToDelete.next);i++{
-//		previousArray[i].next[i] = nodeToDelete.next[i]
-//	}
-//	for s.height > 0 && s.head.next[s.height-1]==nil{
-//		s.height--
-//	}
-//	s.size++
-//	if indicator != 0 {
-//		timeNow := uint64(time.Now().Unix())
-//		writeData(key, nodeToDelete.Value, "wal/wal_0001.log", 1, timeNow)
-//	}
-//
-//	return true
-//}
 
 func(s *SkipList) printList(){
 	fmt.Println("---------------- SKIP LISTA --------------")
