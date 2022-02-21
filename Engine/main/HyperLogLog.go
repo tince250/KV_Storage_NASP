@@ -38,7 +38,7 @@ func (hll *HLL) createHLL(p uint8) bool{
 	return true
 }
 
-func(hll *HLL) encodeHllToBytes() bytes.Buffer{
+func(hll *HLL) encodeHllToBytes() []byte{
 
 	var buffer bytes.Buffer
 	enc := gob.NewEncoder(&buffer)
@@ -47,18 +47,18 @@ func(hll *HLL) encodeHllToBytes() bytes.Buffer{
 		panic(err)
 	}
 
-	return buffer
+	return buffer.Bytes()
 }
-func(hll *HLL) decodeHllFromBytes(hllBytes bytes.Buffer) bool{
-
-	decoder := gob.NewDecoder(&hllBytes)
+func(hll *HLL) decodeHllFromBytes(hllBytes []byte) bool{
+	var bytes bytes.Buffer
+	bytes.Write(hllBytes)
+	decoder := gob.NewDecoder(&bytes)
 	err := decoder.Decode(&hll)
 	if err != nil {
 		fmt.Println(err)
 	}
 	return true
 }
-
 
 func(hll *HLL) serializeHLL(filename string) bool{
 	file, err := os.Create(filename)
