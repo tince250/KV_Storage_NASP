@@ -40,7 +40,7 @@ func(cms *CountMinSketch) createTable(){
 	}
 }
 
-func(cms *CountMinSketch) encodeCmsToBytes() bytes.Buffer{
+func(cms *CountMinSketch) encodeCmsToBytes() []byte{
 	cms.HashFunctions = nil
 	var buffer bytes.Buffer
 	enc := gob.NewEncoder(&buffer)
@@ -49,11 +49,13 @@ func(cms *CountMinSketch) encodeCmsToBytes() bytes.Buffer{
 		panic(err)
 	}
 
-	return buffer
+	return buffer.Bytes()
 }
-func(cms *CountMinSketch) decodeCMSFromBytes(cmsBytes bytes.Buffer) bool{
+func(cms *CountMinSketch) decodeCMSFromBytes(cmsBytes []byte) bool{
 
-	decoder := gob.NewDecoder(&cmsBytes)
+	var bytes bytes.Buffer
+	bytes.Write(cmsBytes)
+	decoder := gob.NewDecoder(&bytes)
 	err := decoder.Decode(&cms)
 	if err != nil {
 		fmt.Println(err)
@@ -61,7 +63,6 @@ func(cms *CountMinSketch) decodeCMSFromBytes(cmsBytes bytes.Buffer) bool{
 	cms.HashFunctions, _ = CreateHashFunctionsCMS(cms.K, cms.Timestamp)
 	return true
 }
-
 
 func(cms *CountMinSketch) serializeCMS(filename string) bool{
 	cms.HashFunctions = nil
