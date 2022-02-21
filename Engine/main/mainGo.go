@@ -19,8 +19,8 @@ func menu(){
 		fmt.Println("2. GET")
 		fmt.Println("3. DELETE")
 		fmt.Println("4. COMPACT")
-		fmt.Println("5. PUT HLL")
-		fmt.Println("6. PUT CMS")
+		fmt.Println("5. HLL CONTROL")
+		fmt.Println("6. CMS CONTROL")
 		fmt.Println("7. EXIT")
 
 		var decision string
@@ -42,6 +42,7 @@ func menu(){
 			}
 		}else if decision == "2"{
 			fmt.Println("GET")
+			fmt.Println("If u want to get Hll elements or CMS elements at the end of the name add _cms\nExample NaspTeam_hll")
 			fmt.Println("Enter Key:\n>> ")
 			var key string
 			fmt.Scanln(&key)
@@ -72,25 +73,21 @@ func menu(){
 			compact(defVals.LsmLevel, defVals.MaxTablesPerLevel)
 
 		}else if decision == "5"{
-			fmt.Println("INSERT HLL")
-			fmt.Println("PUT")
-			fmt.Println("Enter Key:\n>> ")
+			fmt.Println("Enter HLL Key:\n>> ")
 			var key string
 			fmt.Scanln(&key)
 			if tb.addToken() {
-				memtable.insertHllToMemtable(key, 0)
+				memtable.insertHllToMemtable(key, lru)
 			}else{
 				fmt.Println("Token bucket full.")
 			}
 
 		}else if decision == "6"{
-			fmt.Println("INSERT CMS")
-			fmt.Println("PUT")
-			fmt.Println("Enter Key:\n>> ")
+			fmt.Println("Enter CMS Key:\n>> ")
 			var key string
 			fmt.Scanln(&key)
 			if tb.addToken() {
-				memtable.insertCmsToMemtable(key, 0)
+				memtable.insertCmsToMemtable(key, lru)
 			}else{
 				fmt.Println("Token bucket full.")
 			}
@@ -107,14 +104,6 @@ func menu(){
 
 func main(){
 
-	hll := &HLL{}
-	hll.createHLL(6)
-	hll.addData([]byte("davaj"))
-	hll.addData([]byte("votkar"))
-	hll.addData([]byte("skeleton"))
-	bytes := hll.encodeHllToBytes()
+	menu()
 
-	newHll := &HLL{}
-	newHll.decodeHllFromBytes(bytes)
-	fmt.Println(newHll.Estimate())
 }
