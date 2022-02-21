@@ -15,6 +15,9 @@ type Memtable struct{
 }
 
 func(memtable *Memtable) initMemtableWithPassedValues(memtableSize, threshold, walThreshold, maxHeight uint64) bool{
+	/*
+		Inicijalizacija memtabele sa defValue parsiranim argumentima
+	*/
 	memtable.memtableSize =memtableSize
 	memtable.threshold = threshold
 	memtable.currentSize = 0
@@ -26,7 +29,9 @@ func(memtable *Memtable) initMemtableWithPassedValues(memtableSize, threshold, w
 }
 
 func(memtable *Memtable) initMemtable() bool{
-
+	/*
+		Inicijalizacija memtabele bez argumenata
+	*/
 	defVals := &defValues{}
 	defVals.getDefaultValues("config/config.yml")
 	memtable.memtableSize = defVals.MemtableSize
@@ -42,43 +47,36 @@ func(memtable *Memtable) initMemtable() bool{
 
 
 func(memtable *Memtable) reconstructWal(walData []*Data) bool{
-
+	/*
+		Rekonstrukcija memtabele na osnovu wal segmenata
+	*/
 	memtable.skiplist.inserFromWal(walData)
 	memtable.currentSize = uint64(len(walData))
 	return true
 }
 
-func(memtable *Memtable) flush() bool{
-
+func(memtable *Memtable) flush() bool {
 	/*
-		1. Flush memtable u data folder
-		2. Brisanje walova i kreiranje jednog praznog
-		3. Kreiranje index tabele
-		4. Kreiranje summary tabele
-		5. Kreiranje bloomFiltera
-		6. Praznjenje memtable
-		7. Kreiranje TOC
+		Metoda za flushovanje memtable-a i kreiranje sstabele
+		Prvo se procita direktorijum i odredi se redni broj sledeceg fajla, tj koji ce mu biti naziv
+		Kreiraju se fajlovi za celu sstabelu sa tim odredjenim indeksima
+		Zatim se flusha glavni deo(data/index/summary/bf), a nakon toga metadata fajl i toc
 	*/
-
-	/*
-		usertable-data-ic-1-1-Data.db
-		usertable-data-ic-1-1-Filter.db
-	*/
-	/*
-		ulazimo u folder data/filter/index
-		u tom folderu ucitavamo imena fajlova
-		i gledamo koliko direktorijum ima elemenata
-		i dodamo plus 1
-	*/
-
 	filenames := readDirectory("resources/data")
-	var nextIndex int = len(filenames) + 1
+	filenamesForGeneration := getByGeneration(filenames, 1)
+	var nextIndex int = 0
+
+	if len(filenamesForGeneration) == 0 {
+		nextIndex = 1
+	} else {
+		sortedFilenames := sortByCreationTime(filenamesForGeneration)
+		first, _ := getFileIndex(sortedFilenames[0])
+		nextIndex, _ = strconv.Atoi(first)
+		nextIndex = nextIndex + 1
+	}
+
 	baseFilename := "usertable-data-ic-" + strconv.Itoa(nextIndex) + "-1-"
-	/*
-			TODO:
-			2-1
-		    1-2
-	*/
+
 	dataFilename := "resources/data/" + baseFilename + "Data.db"
 	filterFilename := "resources/filter/" + baseFilename + "Filter.db"
 	indexFilename := "resources/index/" + baseFilename + "Index.db"
@@ -95,14 +93,7 @@ func(memtable *Memtable) flush() bool{
 		}
 		file.Close()
 	}
-	/*
-		Upisemo u data, popunimo bloomfilter za taj elem, upisemo tekuci index u index, upisujemo index indexa u summary (start i end na kraju u footer),
-		Na kraju merkle i TOC
 
-		start: anastijsa
-		end: zqwewqewqeqwrtretre
-
-	*/
 
 	listOfValues := memtable.flushMainPart(listOfFilenames[0:4])
 	memtable.flushMetadata(metadataFilename, listOfValues)
@@ -112,6 +103,16 @@ func(memtable *Memtable) flush() bool{
 }
 
 func(memtable *Memtable) flushMainPart(filenames []string) [][]byte{
+	/*
+		Flushuje u fajlove data/index/summary/bloomFilter
+
+		Ide kroz elemente skipliste i flusha ih u data deo sstabele
+		pritom cuva odredjene vrednosti za value(zbog metadata fajla)
+		kao i prvi i poslednji kljuc zbog summary headera. Dok
+		upisuje u data uporedo radi i index, i upisuje kljuceve u bloom filter
+		a nakon prolaska kroz celu listu upisuje summary header i ostale elemente
+
+	*/
 
 	fileData, err := os.OpenFile(filenames[0], os.O_RDWR, 0666)
 	if err != nil{
@@ -198,8 +199,9 @@ func(memtable *Memtable) flushMainPart(filenames []string) [][]byte{
 }
 
 func(memtable *Memtable) flushTOC(filenames [6]string) bool{
-	//	listOfFilenames := [6]string{dataFilename, filterFilename,
-	//	indexFilename, summaryFilename, tocFilename, metadataFilename}
+	/*
+		Flushuje nazive novokreiranih fajlova u tabelu TOC
+	*/
 	f, err := os.OpenFile(filenames[4], os.O_APPEND, 0666)
 	if err != nil{
 		panic(err)
@@ -218,6 +220,9 @@ func(memtable *Memtable) flushTOC(filenames [6]string) bool{
 }
 
 func(memtable *Memtable) flushMetadata(filename string, listOfValues [][]byte)  bool{
+	/*
+		Popunjava merkle stablo i flushuje ga na osnovu vrednosti prikupljenih u mainFlushu
+	*/
 	merkle := MerkleRoot{}
 	merkle.formMerkle(listOfValues)
 	merkle.serializeMerkle(filename)
@@ -225,10 +230,13 @@ func(memtable *Memtable) flushMetadata(filename string, listOfValues [][]byte)  
 }
 
 func(memtable *Memtable) insertToMemtable(key string, value []byte, indicator int) bool{
-	// dodamo u wal
-	// pozoveno addnode iz skipliste
-	// proverimo da li postoji/ne postoji  indikator 0
-	// indicator 0 - add, 1 - edit, 2 - delete
+	/*
+		Put komanda za memtable koja proverava vrednost indikatora i na osnovu toga da li postoji element
+		sa odredjenim kljucem u memtable taj indikator izmenjuje kako bi primenili adekvatnu funkciju
+		add/edit/delete from skiplist, gde je delete logicko brisanje
+		Takodje prati da li je predjena granica dozvoljenosti, tj threshold, ako jeste flushuje memtable
+		pravi novi i prazni wal segmente.
+	*/
 
 	var node *SkipListNode
 	if indicator != 0{
@@ -245,6 +253,7 @@ func(memtable *Memtable) insertToMemtable(key string, value []byte, indicator in
 	}else{
 		node = memtable.skiplist.findNode(key)
 		if node != nil{
+
 			indicator = 1
 
 		}
@@ -296,6 +305,7 @@ func(memtable *Memtable) insertToMemtable(key string, value []byte, indicator in
 		resetWal("wal/")
 		maxHeight := memtable.skiplist.maxHeight
 		walThreshold := memtable.skiplist.walThreshold
+		memtable.currentSize = 0
 		memtable.skiplist = SkipList{}
 		memtable.skiplist.createSkipList(maxHeight, memtable.threshold, walThreshold)
 	}
