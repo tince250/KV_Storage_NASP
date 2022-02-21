@@ -25,6 +25,10 @@ func (d *doublyLinkedList) initList(maxSize uint32) {
 }
 
 func(d *doublyLinkedList) putToLastPosition(node *dllNode){
+	/*
+		Prvo cuva vrednosti node-a zatim brise nod sa njegove trenutne pozicije,
+		prevezuje pokazivace i stavlja ga na poslednju
+	*/
 	key := node.key
 	value := node.value
 	ts := node.ts
@@ -33,26 +37,11 @@ func(d *doublyLinkedList) putToLastPosition(node *dllNode){
 	d.AddEndNodeDLL(key, value, ts, timestamp)
 }
 
-//func (d *doublyLinkedList) AddFrontNodeDLL(data string) {
-//	if d.len >= d.maxSize - 1{
-//		d.rotateDLL()
-//	}
-//	newNode := &dllNode{
-//		data: data,
-//	}
-//	if d.head == nil {
-//		d.head = newNode
-//		d.tail = newNode
-//	} else {
-//		newNode.next = d.head
-//		d.head.prev = newNode
-//		d.head = newNode
-//	}
-//	d.len++
-//	return
-//}
-
 func (d *doublyLinkedList) AddEndNodeDLL(key string, value []byte, toombstone byte, timestamp uint64) *dllNode{
+	/*
+		Dodaje na kraj odredjeni element. Ako je velicina presla dozvoljenu, rotira ga ulevo, tj izbacuje
+		najkasnije koriscen element
+	*/
 	if d.len >= d.maxSize - 1{
 		d.rotateDLL()
 	}
@@ -96,17 +85,6 @@ func(d *doublyLinkedList) rotateDLL(){
 func(d *doublyLinkedList) isEmpty() bool{
 	return d.head == d.tail
 }
-
-//func(d *doublyLinkedList) nodeExists(key string) *dllNode{
-//	start := d.head
-//	for start != nil{
-//		if start.key == key{
-//			return start
-//		}
-//		start = start.next
-//	}
-//	return nil
-//}
 
 func(d *doublyLinkedList) deleteDllNode(node *dllNode) bool{
 	if node != nil{
