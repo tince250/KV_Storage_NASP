@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -228,6 +229,103 @@ func(memtable *Memtable) flushMetadata(filename string, listOfValues [][]byte)  
 	merkle.serializeMerkle(filename)
 	return true
 }
+
+func(memtable *Memtable) insertHllToMemtable(key string, lru *LruCache) bool{
+
+	/*
+		Trazi prvo da li kljuc postoji u memtabeli
+		Ukoliko postoji za dodavanje raditi izmenu, a za brisanje klasicno logicko brisanje
+		Ukoliko ne postoji uraditi dodavanje kad se radi put, a brisanje ignorisati
+		Dodavanje radimo tako sto kreiramo novu hll tabelu,a izmenu tako sto je ucitamo iz memorije
+		i dodamo nove vrednosti u nju
+	*/
+
+
+	key = key + "_hll"
+
+	// ovde ide pitanje sta hoce put ili delete
+	fmt.Println("1. Put")
+	fmt.Println("2. Delete")
+	var decision string
+	fmt.Print("\nChoose option:\n>> ")
+	// Taking input from user
+	fmt.Scanln(&decision)
+
+	if decision == "1"{
+		node := get(memtable, lru, key)
+		if node == nil{
+			// kreiramo novi HLL
+			fmt.Println("Enter P [4, 16]")
+			var p uint8
+			_, err := fmt.Scanln(&p)
+			if err != nil {
+				panic(err)
+			}
+			if p < 4 || p > 16{
+				fmt.Println("P not in boundaries!")
+				return false
+			}
+			hll := &HLL{}
+			hll.createHLL(p)
+			fmt.Println("Enter values to put in HLL until x is pressed.")
+			var value string = ""
+			fmt.Println(">> ")
+			_, err = fmt.Scanln(&value)
+			if err != nil{
+				panic(err)
+			}
+
+			for value != "x"{
+				hll.addData([]byte(value))
+				fmt.Println(">> ")
+				_, err := fmt.Scanln(&value)
+				if err != nil {
+					panic(err)
+				}
+			}
+			fmt.Printf("Hll with name: %s sucesfully created.\n", key)
+			memtable.insertToMemtable(key, hll.encodeHllToBytes(), 0)
+		}else{
+			// deserijalizujemo i dodajemo nove vrednosti
+			hll := &HLL{}
+			hll.decodeHllFromBytes(node.value)
+			fmt.Println("Enter values to put in HLL until x is pressed.")
+			var value string = ""
+			fmt.Println(">> ")
+			_, err := fmt.Scanln(&value)
+			if err != nil{
+				panic(err)
+			}
+
+			for value != "x"{
+				hll.addData([]byte(value))
+				fmt.Println(">> ")
+				_, err := fmt.Scanln(&value)
+				if err != nil {
+					panic(err)
+				}
+			}
+			memtable.insertToMemtable(key, hll.encodeHllToBytes(), 1)
+		}
+
+	}else if decision == "2"{
+		// odraditi delete
+		node := get(memtable, lru, key)
+		if node == nil{
+			return true
+		}else{
+			memtable.insertToMemtable(key, []byte(""), 2)
+		}
+	}else{
+		fmt.Println("Neispravan unos.")
+		return false
+	}
+
+	return true
+}
+
+
+
 
 func(memtable *Memtable) insertToMemtable(key string, value []byte, indicator int) bool{
 	/*
