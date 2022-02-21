@@ -5,10 +5,6 @@ import (
 )
 
 func menu(){
-	//PUT X
-	//GET
-	//DELETE X
-	//START COMPACTION
 	defVals := defValues{}
 	defVals.getDefaultValues("config/config.yml")
 	memtable := &Memtable{}
@@ -16,7 +12,7 @@ func menu(){
 	lru := &LruCache{}
 	lru.initializeLRU(defVals.CacheSize) //TODO: DEFAULT VREDNOSTI ZA CACHE
 	tb := &TokenBucket{}
-	tb.initTokenBucket(5,5)
+	tb.initTokenBucket(defVals.TokenNumber,defVals.TokenReset)
 	for{
 
 		fmt.Println("1. PUT")
@@ -52,7 +48,9 @@ func menu(){
 				node := get(memtable, lru, key)
 				if node != nil {
 					fmt.Println(node.key)
-					fmt.Println(node.value)
+					fmt.Println(string(node.value))
+				}else{
+					fmt.Println("No node")
 				}
 			}else{
 				fmt.Println("Token bucket full.")
@@ -70,6 +68,7 @@ func menu(){
 			}
 		}else if decision == "4"{
 			fmt.Println("COMPACT FILES")
+			compact(defVals.LsmLevel, defVals.MaxTablesPerLevel)
 		}else if decision == "5"{
 			fmt.Println("Exiting app...")
 			break
@@ -81,5 +80,7 @@ func menu(){
 }
 
 func main(){
+
 	menu()
+
 }
