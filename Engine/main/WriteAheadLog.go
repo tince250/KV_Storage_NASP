@@ -98,92 +98,6 @@ func writeData(key string, value []byte, filepath string, tombstone byte) bool{
 	return true
 }
 
-//func findData(key string, filepath string) *Data{
-//	file, err := os.OpenFile(filepath, os.O_RDONLY, 0777)
-//	if err !=nil{
-//		panic(err)
-//	}
-//	offset := int64(29)
-//	for {
-//		file.Seek(0, 1)
-//		data := make([]byte, 29)
-//		_, err = file.Read(data)
-//		if err == io.EOF{
-//			break
-//		}
-//		if err != nil{
-//			continue
-//		}
-//		crc := binary.LittleEndian.Uint32(data[:C_SIZE])
-//		keySize := binary.LittleEndian.Uint64(data[TOMBSTONE_SIZE:KEY_SIZE])
-//		valueSize := binary.LittleEndian.Uint64(data[KEY_SIZE:VALUE_SIZE])
-//		keyB := make([]byte, keySize)
-//
-//		file.Seek(offset, 0)
-//		file.Read(keyB)
-//		keyToCompare := string(keyB)
-//		valueB := make([]byte, valueSize)
-//		kSizeToStr:= strconv.FormatUint(keySize, 10)
-//		kSizeInt, err := strconv.Atoi(kSizeToStr)
-//		if err != nil{
-//			panic(err)
-//		}
-//
-//		file.Seek(offset + int64(kSizeInt), 0)
-//		file.Read(valueB)
-//
-//		value := string(valueB)
-//		vSizeToStr:= strconv.FormatUint(valueSize, 10)
-//		vSizeInt, err := strconv.Atoi(vSizeToStr)
-//		if err != nil{
-//			panic(err)
-//		}
-//		if crc == CRC32([]byte(value)) {
-//			if key == keyToCompare {
-//				return &Data{key, valueB, 0}
-//			}
-//		}
-//		file.Seek(offset + int64(vSizeInt) + int64(kSizeInt), 0)
-//		offset += int64(vSizeInt) + int64(kSizeInt) + 29
-//
-//	}
-//
-//	err = file.Close()
-//	if err != nil {
-//		return nil
-//	}
-//	return nil
-//}
-
-//func convertInputToData(data []byte) []*Data{
-//	offset := uint64(0)
-//	iOffset := 0
-//	newData := make([]*Data, 0)
-//	for iOffset < len(data){
-//		crc := binary.LittleEndian.Uint32(data[offset:C_SIZE + offset])
-//		ts := data[CRC_SIZE + offset:offset + TOMBSTONE_SIZE][0]
-//		keySize := binary.LittleEndian.Uint64(data[TOMBSTONE_SIZE + offset :KEY_SIZE + offset])
-//		valueSize := binary.LittleEndian.Uint64(data[KEY_SIZE + offset:VALUE_SIZE + offset])
-//
-//		offset += 29
-//		key := data[offset:offset + keySize]
-//		offset = offset + keySize
-//		value := data[offset:offset+valueSize]
-//		offset = offset + valueSize
-//		s := strconv.FormatUint(offset, 10)
-//		iOffset, _ = strconv.Atoi(s)
-//
-//		if crc == CRC32(value) {
-//			if ts == 0 {
-//				newData = append(newData, &Data{string(key), value, 0})
-//			}
-//		}
-//
-//	}
-//
-//	return newData
-//}
-
 func readFullData(filepath string) []*Data{
 	bytes, err := ioutil.ReadFile(filepath)
 	if err != nil{
@@ -270,22 +184,10 @@ func readData(filepath string, lines int) []*Data{
 
 		file.Seek(offset + int64(vSizeInt) + int64(kSizeInt), 0)
 		offset += int64(vSizeInt) + int64(kSizeInt) + 29
-
-
-		//if crc == CRC32([]byte(value)) {
-		//	humanList[i] = &Human{key, value}
-		//}
 		fmt.Println(key, value)
-
-		//fmt.Println(vSizeInt)
-		//fmt.Println(kSizeInt)
 		fmt.Println(crc)
 		fmt.Println(timeStamp)
 		fmt.Println(tombstone)
-		//fmt.Println(keySize)
-		//fmt.Println(valueSize)
-		//fmt.Println(key)
-		//fmt.Println(value)
 
 	}
 	err = file.Close()
