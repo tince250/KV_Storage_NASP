@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/gob"
 	"fmt"
 	"hash/fnv"
@@ -37,32 +38,58 @@ func (hll *HLL) createHLL(p uint8) bool{
 	return true
 }
 
-func(hll *HLL) serializeHLL(filename string){
+func(hll *HLL) encodeHllToBytes() bytes.Buffer{
+
+	var buffer bytes.Buffer
+	enc := gob.NewEncoder(&buffer)
+	err := enc.Encode(hll)
+	if err != nil{
+		panic(err)
+	}
+
+	return buffer
+}
+func(hll *HLL) decodeHllFromBytes(hllBytes bytes.Buffer) bool{
+
+	decoder := gob.NewDecoder(&hllBytes)
+	err := decoder.Decode(&hll)
+	if err != nil {
+		fmt.Println(err)
+	}
+	return true
+}
+
+
+func(hll *HLL) serializeHLL(filename string) bool{
 	file, err := os.Create(filename)
 	if err != nil{
 		panic(err)
 	}
-
 	encoder := gob.NewEncoder(file)
-	err = encoder.Encode(hll.M)
-	err = encoder.Encode(hll.P)
-	err = encoder.Encode(hll.Reg)
-	err = file.Close()
-	if err != nil{
+	err = encoder.Encode(hll)
+	if err != nil {
 		panic(err)
 	}
+	err = file.Close()
+	return true
 }
 
-func(hll *HLL) deseriaLizeHLL(filename string){
+func(hll *HLL) deseriaLizeHLL(filename string) bool{
 	file, err := os.Open(filename)
 	if err != nil{
 		panic(err)
 	}
 
 	decoder := gob.NewDecoder(file)
-	err = decoder.Decode(&hll.M)
-	err = decoder.Decode(&hll.P)
-	err = decoder.Decode(&hll.Reg)
+	err = decoder.Decode(&hll)
+	if err != nil {
+		fmt.Println(err)
+	}
+	err = file.Close()
+	if err != nil {
+		panic(err)
+	}
+	return true
 
 }
 

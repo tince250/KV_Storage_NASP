@@ -19,7 +19,9 @@ func menu(){
 		fmt.Println("2. GET")
 		fmt.Println("3. DELETE")
 		fmt.Println("4. COMPACT")
-		fmt.Println("5. EXIT")
+		fmt.Println("5. PUT HLL")
+		fmt.Println("6. PUT CMS")
+		fmt.Println("7. EXIT")
 
 		var decision string
 		fmt.Print("\nChoose option:\n>> ")
@@ -33,7 +35,6 @@ func menu(){
 			fmt.Println("Enter Value:\n>> ")
 			var value string
 			fmt.Scanln(&value)
-			memtable.insertToMemtable(key, []byte(value), 0)
 			if tb.addToken() {
 				memtable.insertToMemtable(key, []byte(value), 0)
 			}else{
@@ -48,7 +49,7 @@ func menu(){
 				node := get(memtable, lru, key)
 				if node != nil {
 					fmt.Println(node.key)
-					fmt.Println(string(node.value))
+					fmt.Println(node.value)
 				}else{
 					fmt.Println("No node")
 				}
@@ -69,7 +70,32 @@ func menu(){
 		}else if decision == "4"{
 			fmt.Println("COMPACT FILES")
 			compact(defVals.LsmLevel, defVals.MaxTablesPerLevel)
+
 		}else if decision == "5"{
+			fmt.Println("INSERT HLL")
+			fmt.Println("PUT")
+			fmt.Println("Enter Key:\n>> ")
+			var key string
+			fmt.Scanln(&key)
+			if tb.addToken() {
+				memtable.insertHllToMemtable(key, 0)
+			}else{
+				fmt.Println("Token bucket full.")
+			}
+
+		}else if decision == "6"{
+			fmt.Println("INSERT CMS")
+			fmt.Println("PUT")
+			fmt.Println("Enter Key:\n>> ")
+			var key string
+			fmt.Scanln(&key)
+			if tb.addToken() {
+				memtable.insertCmsToMemtable(key, 0)
+			}else{
+				fmt.Println("Token bucket full.")
+			}
+
+		} else if decision == "7"{
 			fmt.Println("Exiting app...")
 			break
 		}else{
@@ -81,6 +107,14 @@ func menu(){
 
 func main(){
 
-	menu()
+	hll := &HLL{}
+	hll.createHLL(6)
+	hll.addData([]byte("davaj"))
+	hll.addData([]byte("votkar"))
+	hll.addData([]byte("skeleton"))
+	bytes := hll.encodeHllToBytes()
 
+	newHll := &HLL{}
+	newHll.decodeHllFromBytes(bytes)
+	fmt.Println(newHll.Estimate())
 }

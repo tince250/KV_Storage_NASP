@@ -1,10 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/gob"
+	"fmt"
 	"github.com/spaolacci/murmur3"
 	"hash"
-	"io"
 	"math"
 	"os"
 	"time"
@@ -12,9 +13,9 @@ import (
 
 type CountMinSketch struct{
 	M uint
-	K uint32
+	K uint
 	Table [][]uint
-	Timestamp []uint32
+	Timestamp uint
 	HashFunctions []hash.Hash32
 
 }
@@ -22,7 +23,7 @@ type CountMinSketch struct{
 func(cms *CountMinSketch) initializeCountMinSketch(epsilon, delta float64) bool{
 	cms.M = CalculateMCMS(epsilon)
 	cms.K = CalculateKCMS(delta)
-	cms.HashFunctions, cms.Timestamp = CreateHashFunctionsCMS(cms.K)
+	cms.HashFunctions, cms.Timestamp = CreateHashFunctionsCMS(cms.K, 0)
 	cms.createTable()
 	return true
 }
@@ -38,55 +39,57 @@ func(cms *CountMinSketch) createTable(){
 		}
 	}
 }
-//TODO: SERIJALIZOVATI I DESERIJALIZOVATI CMS
+
+func(cms *CountMinSketch) encodeCmsToBytes() bytes.Buffer{
+	cms.HashFunctions = nil
+	var buffer bytes.Buffer
+	enc := gob.NewEncoder(&buffer)
+	err := enc.Encode(cms)
+	if err != nil{
+		panic(err)
+	}
+
+	return buffer
+}
+func(cms *CountMinSketch) decodeCMSFromBytes(cmsBytes bytes.Buffer) bool{
+
+	decoder := gob.NewDecoder(&cmsBytes)
+	err := decoder.Decode(&cms)
+	if err != nil {
+		fmt.Println(err)
+	}
+	cms.HashFunctions, _ = CreateHashFunctionsCMS(cms.K, cms.Timestamp)
+	return true
+}
+
 
 func(cms *CountMinSketch) serializeCMS(filename string) bool{
+	cms.HashFunctions = nil
 	file, err := os.Create(filename)
 	if err != nil{
 		return false
 	}
-
 	encoder := gob.NewEncoder(file)
-	err = encoder.Encode(cms.M)
-	err = encoder.Encode(cms.K)
-	err = encoder.Encode(cms.Table)
-	err = encoder.Encode(cms.Timestamp)
-	for i:=0;i<len(cms.HashFunctions);i++{
-		err = encoder.Encode(cms.HashFunctions[i])
-		if err != nil{
-			return false
-		}
+	err = encoder.Encode(cms)
+	if err != nil {
+		panic(err)
 	}
 	err = file.Close()
-	if err != nil{
-		return false
-	}
 	return true
 }
 
 func(cms *CountMinSketch) deserializeCMS(filename string) bool{
-
 	file, err := os.Open(filename)
 	if err != nil{
 		panic(err)
 	}
 
 	decoder := gob.NewDecoder(file)
-	err = decoder.Decode(&cms.M)
-	err = decoder.Decode(&cms.K)
-	err = decoder.Decode(&cms.Table)
-	err = decoder.Decode(&cms.Timestamp)
-
-	for i:= uint32(0);i<cms.K;i++{
-
-		h := murmur3.New32WithSeed(cms.Timestamp[i])
-		err = decoder.Decode(h)
-		cms.HashFunctions = append(cms.HashFunctions, h)
-		if err != nil && err != io.EOF{
-			panic(err)
-		}
+	err = decoder.Decode(&cms)
+	if err != nil {
+		fmt.Println(err)
 	}
-
+	cms.HashFunctions, _ = CreateHashFunctionsCMS(cms.K, cms.Timestamp)
 	err = file.Close()
 	if err != nil {
 		panic(err)
@@ -131,18 +134,18 @@ func CalculateMCMS(epsilon float64) uint {
 	return uint(math.Ceil(math.E / epsilon))
 }
 
-func CalculateKCMS(delta float64) uint32 {
-	return uint32(math.Ceil(math.Log(math.E / delta)))
+func CalculateKCMS(delta float64) uint {
+	return uint(math.Ceil(math.Log(math.E / delta)))
 }
 
-func CreateHashFunctionsCMS(k uint32) ([]hash.Hash32, []uint32) {
+func CreateHashFunctionsCMS(k uint, t uint) ([]hash.Hash32, uint) {
 	h := []hash.Hash32{}
-	timestamp := []uint32{}
-	ts := uint32(time.Now().Unix())
-	for i := uint32(0); i < k; i++ {
-		timestamp = append(timestamp, ts + i)
-		h = append(h, murmur3.New32WithSeed(ts+i))
+	if t == 0 {
+		t = uint(time.Now().Unix())
 	}
-	return h, timestamp
+	for i := uint(0); i < k; i++ {
+		h = append(h, murmur3.New32WithSeed(uint32(t+i)))
+	}
+	return h, t
 }
 
