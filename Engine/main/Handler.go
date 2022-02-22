@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/binary"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -18,7 +17,8 @@ func compact(maxLSMLevel uint64, maxTablesPerLevel int) bool {
 	for i < maxLSMLevel {
 		filenames := readDirectory("resources/data/")
 		genFilenames := getByGeneration(filenames, i)
-		if len(genFilenames) > maxTablesPerLevel {
+
+		if len(genFilenames) >= maxTablesPerLevel {
 			index := i + uint64(1)
 			gen2Filenames := getByGeneration(filenames, index)
 			var nextFileIndex uint64
@@ -30,10 +30,9 @@ func compact(maxLSMLevel uint64, maxTablesPerLevel int) bool {
 				nextFileIndex, _ = strconv.ParseUint(first, 10, 64)
 
 			}
-
 			mergeFiles(genFilenames[0], genFilenames[1], index, nextFileIndex+1)
 		}
-		if len(genFilenames) < 2 {
+		if len(genFilenames) < maxTablesPerLevel {
 			i++
 		}
 
@@ -96,7 +95,6 @@ func mergeFiles(first string, second string, newLevel uint64, nextFileIndex uint
 
 	file2, err := os.OpenFile(second, os.O_RDONLY, 0777)
 
-	nodes := make([]*Data, 0)
 	if err != nil {
 		panic(err)
 	}
@@ -113,6 +111,7 @@ func mergeFiles(first string, second string, newLevel uint64, nextFileIndex uint
 		}
 		file.Close()
 	}
+
 	fileData, err := os.OpenFile(listOfFilenames[0], os.O_RDWR, 0777)
 
 	if err != nil {
@@ -129,8 +128,8 @@ func mergeFiles(first string, second string, newLevel uint64, nextFileIndex uint
 
 	index1 := uint64(0)
 	index2 := uint64(0)
-	node1 := readRecord(file1, index1)
-	node2 := readRecord(file2, index2)
+	node1 := readRecord(file2, index2)
+	node2 := readRecord(file1, index1)
 
 	var firstKey string = ""
 	var firstKeyIndicator byte = 0
@@ -145,12 +144,13 @@ func mergeFiles(first string, second string, newLevel uint64, nextFileIndex uint
 				indexPosition := addToData(fileData, node1)
 				addToIndex(fileIndex, currentPosition, node1.key)
 				listOfValues = append(listOfValues, node1.value)
-				currentPosition = indexPosition
+				currentPosition += indexPosition
 				filterSize++
 				if firstKeyIndicator == 0 {
 					firstKey = node1.key
 					firstKeyIndicator = 1
 				}
+				lastKey = node1.key
 			}
 			node1 = readRecord(file1, index1)
 
@@ -159,12 +159,13 @@ func mergeFiles(first string, second string, newLevel uint64, nextFileIndex uint
 				indexPosition := addToData(fileData, node2)
 				addToIndex(fileIndex, currentPosition, node2.key)
 				listOfValues = append(listOfValues, node2.value)
-				currentPosition = indexPosition
+				currentPosition += indexPosition
 				filterSize++
 				if firstKeyIndicator == 0 {
 					firstKey = node2.key
 					firstKeyIndicator = 1
 				}
+				lastKey = node1.key
 			}
 			node2 = readRecord(file2, index2)
 
@@ -174,12 +175,13 @@ func mergeFiles(first string, second string, newLevel uint64, nextFileIndex uint
 					indexPosition := addToData(fileData, node2)
 					addToIndex(fileIndex, currentPosition, node2.key)
 					listOfValues = append(listOfValues, node2.value)
-					currentPosition = indexPosition
+					currentPosition += indexPosition
 					filterSize++
 					if firstKeyIndicator == 0 {
 						firstKey = node2.key
 						firstKeyIndicator = 1
 					}
+					lastKey = node1.key
 				}
 
 			} else {
@@ -187,12 +189,13 @@ func mergeFiles(first string, second string, newLevel uint64, nextFileIndex uint
 					indexPosition := addToData(fileData, node1)
 					addToIndex(fileIndex, currentPosition, node1.key)
 					listOfValues = append(listOfValues, node1.value)
-					currentPosition = indexPosition
+					currentPosition += indexPosition
 					filterSize++
 					if firstKeyIndicator == 0 {
 						firstKey = node1.key
 						firstKeyIndicator = 1
 					}
+					lastKey = node1.key
 				}
 			}
 			node2 = readRecord(file2, index2)
@@ -201,9 +204,6 @@ func mergeFiles(first string, second string, newLevel uint64, nextFileIndex uint
 
 	}
 
-	//bloomfilter:= &BloomFilter{}
-	//bloomfilter.initializeBloomFilter(,0.4)
-
 	if node1 == nil {
 		//nastavi node2
 		for node2 != nil {
@@ -211,7 +211,7 @@ func mergeFiles(first string, second string, newLevel uint64, nextFileIndex uint
 				indexPosition := addToData(fileData, node2)
 				addToIndex(fileIndex, currentPosition, node2.key)
 				listOfValues = append(listOfValues, node2.value)
-				currentPosition = indexPosition
+				currentPosition += indexPosition
 				filterSize++
 				lastKey = node2.key
 			}
@@ -223,15 +223,13 @@ func mergeFiles(first string, second string, newLevel uint64, nextFileIndex uint
 				indexPosition := addToData(fileData, node1)
 				addToIndex(fileIndex, currentPosition, node1.key)
 				listOfValues = append(listOfValues, node1.value)
-				currentPosition = indexPosition
+				currentPosition += indexPosition
 				filterSize++
 				lastKey = node1.key
 			}
 			node1 = readRecord(file1, index1)
 		}
 	}
-
-	fmt.Println(" ")
 	file1.Close()
 	file2.Close()
 
@@ -248,17 +246,33 @@ func mergeFiles(first string, second string, newLevel uint64, nextFileIndex uint
 	appendData(fileSummary, startIndex)
 	appendData(fileSummary, endIndex)
 
+
 	bf := &BloomFilter{}
 	bf.initializeBloomFilter(filterSize, 0.4)
-	currentPosition = 0
+
+
+	newCurrentPosition := uint64(0)
+
 	key, summaryIndex := readIndexRecord(fileIndex)
 
-	for key != "" && summaryIndex != 0 {
-		summaryData := createIndexData(key, currentPosition)
-		appendData(fileSummary, summaryData)
 
-		currentPosition = summaryIndex
+	for summaryIndex != 0 {
+		summaryData := createIndexData(key, newCurrentPosition)
+		appendData(fileSummary, summaryData)
+		bf.addElement([]byte(key))
+		newCurrentPosition += summaryIndex
+		key, summaryIndex = readIndexRecord(fileIndex)
 	}
+
+	bf.encodeFilter(listOfFilenames[1])
+
+
+	merkleTree := &MerkleRoot{}
+	merkleTree.formMerkle(listOfValues)
+	merkleTree.serializeMerkle(listOfFilenames[5])
+
+	flushNewTOC(listOfFilenames)
+
 
 	// brisemo stare fajlove
 	firstIndex, firstLevel := getFileIndex(first)
@@ -275,35 +289,25 @@ func mergeFiles(first string, second string, newLevel uint64, nextFileIndex uint
 	deleteSSTable(listOfFilenamesFirst)
 	deleteSSTable(listOfFilenamesSecond)
 
-	//otvorimo ova fajla
-	//uzmemo prvih 29 bitova iz oba
-	// zatim odatle se sikujemo za pozicije key value
-	// uzimamo te vrednosti i poredimo kljuceve
-	// pritom gledamo prvo timestamp pa zatim tombstone
+}
 
-	/*
+func flushNewTOC(filenames [6]string){
+	//	listOfFilenames := [6]string{dataFilename, filterFilename,
+	//	indexFilename, summaryFilename, tocFilename, metadataFilename}
+	f, err := os.OpenFile(filenames[4], os.O_APPEND, 0666)
+	if err != nil{
+		panic(err)
+	}
+	defer f.Close()
 
-				...
-			//upisemo key u novi file ako nije ts
-			//seekujemo se za novi podatak u file u kome je bio key
-
-			if key < key2{
-			.....
-		}
-			}else if key > key2{
-				...
-			}else{
-				if timestamp1 < timestamp2{
-			...
-
-			}else{
-				if tombostone == 1{
-					...
-			if tombo
-
-			}
-			}
-	*/
+	var filenamesToPut string = ""
+	for i:=0;i<len(filenames);i++{
+		filenamesToPut += filenames[i] + "\n"
+	}
+	_, err2 := f.WriteString(filenamesToPut)
+	if err2 != nil{
+		panic(err2)
+	}
 
 }
 
@@ -360,7 +364,7 @@ func get(memtable *Memtable, lru *LruCache, key string) *Data {
 	return nil
 }
 
-//
+
 func fileIndex(filename string) string {
 
 	word := ""
@@ -381,14 +385,16 @@ func checkFilters(filenames []string, key string) *dllNode {
 	for i := 0; i < len(filenames); i++ {
 		filter := &BloomFilter{}
 		filter.decodeFilter(filenames[i])
+
 		if filter.exists([]byte(key)) {
+
 			filename := fileIndex(filenames[i])
 			inRange := checkSummaryHeader(key, filename)
 
 			if inRange > 0 {
+
 				indexFilePosition := checkSummary(key, filename, inRange)
 				if indexFilePosition != 1 {
-
 					dataFilePosition := checkDataIndex(key, filename, indexFilePosition)
 
 					if dataFilePosition != 1 {
@@ -660,7 +666,7 @@ func checkSummaryHeader(key string, word string) uint64 {
 		file.Close()
 		return 0
 	}
-	file.Close()
+
 	return 8 + 8 + firstKeyLength + secondtKeyLength
 
 }
