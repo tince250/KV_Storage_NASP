@@ -44,50 +44,37 @@ func(bf *BloomFilter) addElement(element []byte){
 	}
 }
 func(bf *BloomFilter) exists(element []byte) bool{
+	
 	for i:=0;i<len(bf.HashFunctions);i++{
 		bf.HashFunctions[i].Reset()
 		_, err := bf.HashFunctions[i].Write(element)
 		if err != nil {
 			return false
 		}
+		
 		index := bf.HashFunctions[i].Sum32() % uint32(bf.M)
 		if bf.BitSet[index] == 0{
 			return false
 		}
+		
 	}
+	
 	return true
 }
 
 func (bf *BloomFilter)decodeFilter(filename string){
+	
 	file, err := os.Open(filename)
 	if err != nil{
 		panic(err)
 	}
 
-	//decoder := gob.NewDecoder(file)
-	//err = decoder.Decode(&bf.M)
-	//err = decoder.Decode(&bf.K)
-	//
-	//err = decoder.Decode(&bf.BitSet)
-	//err = decoder.Decode(&bf.Timestamp)
-	//
-	//
-	//for i:= uint(0);i<bf.K;i++{
-	//	h := murmur3.New32WithSeed(bf.Timestamp[i])
-	//
-	//	err = decoder.Decode(h)
-	//	bf.HashFunctions = append(bf.HashFunctions, h)
-	//	if err != nil && err != io.EOF{
-	//		panic(err)
-	//	}
-	//}
-	//
-	//err = file.Close()
 	decoder := gob.NewDecoder(file)
 	err = decoder.Decode(&bf)
 	if err != nil {
 		fmt.Println(err)
 	}
+	
 	bf.HashFunctions, _ = CreateHashFunctions(bf.K, bf.Timestamp)
 	err = file.Close()
 	if err != nil {
@@ -97,36 +84,46 @@ func (bf *BloomFilter)decodeFilter(filename string){
 
 
 func(bf *BloomFilter) encodeFilter(filename string) bool{
+	
 	bf.HashFunctions = nil
 	file, err := os.Create(filename)
 	if err != nil{
 		return false
 	}
+	
 	encoder := gob.NewEncoder(file)
 	err = encoder.Encode(bf)
 	if err != nil {
 		panic(err)
 	}
+	
 	err = file.Close()
 	return true
 
 }
 
 func CalculateM(expectedElements int, falsePositiveRate float64) uint {
+	
 	return uint(math.Ceil(float64(expectedElements) * math.Abs(math.Log(falsePositiveRate)) / math.Pow(math.Log(2), float64(2))))
+	
 }
 
 func CalculateK(expectedElements int, m uint) uint {
+	
 	return uint(math.Ceil((float64(m) / float64(expectedElements)) * math.Log(2)))
+	
 }
 
 func CreateHashFunctions(k uint, t uint) ([]hash.Hash32, uint) {
+	
 	h := []hash.Hash32{}
 	if t == 0 {
 		t = uint(time.Now().Unix())
 	}
+	
 	for i := uint(0); i < k; i++ {
 		h = append(h, murmur3.New32WithSeed(uint32(t+i)))
 	}
+	
 	return h, t
 }
