@@ -25,7 +25,7 @@ import (
 
 type ToWriteStruct struct {
 	Crc uint32
-	Timestamp int64
+	Timestamp uint64
 	Tombstone byte
 	KeySize uint64
 	ValueSize uint64
@@ -49,7 +49,7 @@ func bufferedWritter(buffer *Buffer, filepath string) bool{
 	}
 	for i:=0;i<len(buffer.data);i++{
 		checksum := CRC32(buffer.data[i].value)
-		tws:= ToWriteStruct{checksum, time.Now().Unix(), 0, uint64(len(buffer.data[i].key)), uint64(len(buffer.data[i].value)), buffer.data[i].key, buffer.data[i].value}
+		tws:= ToWriteStruct{checksum, uint64(time.Now().Unix()), 0, uint64(len(buffer.data[i].key)), uint64(len(buffer.data[i].value)), buffer.data[i].key, buffer.data[i].value}
 		binary.Write(file, binary.LittleEndian, tws.Crc)
 		binary.Write(file, binary.LittleEndian, tws.Timestamp)
 		binary.Write(file, binary.LittleEndian, tws.Tombstone)
@@ -65,7 +65,7 @@ func bufferedWritter(buffer *Buffer, filepath string) bool{
 	return true
 }
 
-func writeData(key string, value []byte, filepath string, tombstone byte) bool{
+func writeData(key string, value []byte, filepath string, tombstone byte, timestamp uint64) bool{
 	if !existsFile(filepath){
 		_, err := os.Create(filepath)
 		if err!=nil{
@@ -74,7 +74,7 @@ func writeData(key string, value []byte, filepath string, tombstone byte) bool{
 	}
 
 	checksum := CRC32(value)
-	tws := ToWriteStruct{checksum, time.Now().Unix(), tombstone, uint64(len(key)), uint64(len(value)), key, value}
+	tws := ToWriteStruct{checksum, timestamp, tombstone, uint64(len(key)), uint64(len(value)), key, value}
 
 	//crc(4b) timeStamp(8b) tombstone(1b) keySize(8b) valueSize(8b) key value
 	file, err := os.OpenFile(filepath, os.O_APPEND, 0777)
@@ -99,35 +99,45 @@ func writeData(key string, value []byte, filepath string, tombstone byte) bool{
 }
 
 func readFullData(filepath string) []*Data{
-	bytes, err := ioutil.ReadFile(filepath)
-	if err != nil{
-		panic(err)
-	}
 
+	filenames := readDirectory(filepath)
 	data := make([]*Data, 0)
-	offset := uint64(0)
-	iOffset := 0
-	//crc(4b) timeStamp(8b) tombstone(1b) keySize(8b) valueSize(8b) key value
-	for iOffset < len(bytes){
-		crc := binary.LittleEndian.Uint32(bytes[offset:C_SIZE + offset])
-		timeStamp := binary.LittleEndian.Uint64(bytes[C_SIZE + offset: CRC_SIZE + offset])
-		ts := bytes[CRC_SIZE + offset:offset + TOMBSTONE_SIZE][0]
-		keySize := binary.LittleEndian.Uint64(bytes[TOMBSTONE_SIZE + offset :KEY_SIZE + offset])
-		valueSize := binary.LittleEndian.Uint64(bytes[KEY_SIZE + offset:VALUE_SIZE + offset])
+	for _, i:= range filenames {
 
-		offset += 29
-		key := bytes[offset:offset + keySize]
-		offset = offset + keySize
-		value := bytes[offset:offset+valueSize]
-		offset = offset + valueSize
-		s := strconv.FormatUint(offset, 10)
-		iOffset, err = strconv.Atoi(s)
-		if err != nil{
+		bytes, err := ioutil.ReadFile(i)
+
+		if len(bytes) == 0{
+			return data
+		}
+		if err != nil {
 			panic(err)
 		}
-		if crc == CRC32(value) {
-			data = append(data, &Data{string(key), value, ts, timeStamp})
 
+
+		offset := uint64(0)
+		iOffset := 0
+		//crc(4b) timeStamp(8b) tombstone(1b) keySize(8b) valueSize(8b) key value
+		for iOffset < len(bytes) {
+
+			crc := binary.LittleEndian.Uint32(bytes[offset : C_SIZE+offset])
+			timeStamp := binary.LittleEndian.Uint64(bytes[C_SIZE+offset : CRC_SIZE+offset])
+			ts := bytes[CRC_SIZE+offset : offset+TOMBSTONE_SIZE][0]
+			keySize := binary.LittleEndian.Uint64(bytes[TOMBSTONE_SIZE+offset : KEY_SIZE+offset])
+			valueSize := binary.LittleEndian.Uint64(bytes[KEY_SIZE+offset : VALUE_SIZE+offset])
+			offset += 29
+			key := bytes[offset : offset+keySize]
+			offset = offset + keySize
+			value := bytes[offset : offset+valueSize]
+			offset = offset + valueSize
+			s := strconv.FormatUint(offset, 10)
+			iOffset, err = strconv.Atoi(s)
+			if err != nil {
+				panic(err)
+			}
+			if crc == CRC32(value) {
+				data = append(data, &Data{string(key), value, ts, timeStamp})
+
+			}
 		}
 
 	}
@@ -184,10 +194,22 @@ func readData(filepath string, lines int) []*Data{
 
 		file.Seek(offset + int64(vSizeInt) + int64(kSizeInt), 0)
 		offset += int64(vSizeInt) + int64(kSizeInt) + 29
+
+
+		//if crc == CRC32([]byte(value)) {
+		//	humanList[i] = &Human{key, value}
+		//}
 		fmt.Println(key, value)
+
+		//fmt.Println(vSizeInt)
+		//fmt.Println(kSizeInt)
 		fmt.Println(crc)
 		fmt.Println(timeStamp)
 		fmt.Println(tombstone)
+		//fmt.Println(keySize)
+		//fmt.Println(valueSize)
+		//fmt.Println(key)
+		//fmt.Println(value)
 
 	}
 	err = file.Close()
@@ -196,6 +218,9 @@ func readData(filepath string, lines int) []*Data{
 	}
 	return humanList
 }
+
+
+
 
 func CRC32(data []byte) uint32 {
 	return crc32.ChecksumIEEE(data)
