@@ -14,7 +14,7 @@ func menu(){
 	tb := &TokenBucket{}
 	tb.initTokenBucket(defVals.TokenNumber,defVals.TokenReset)
 
-	fmt.Println("------------Wlecome to the Team7 engine------------")
+	fmt.Println("------------Welcome to the Team7 engine------------")
 	for{
 		fmt.Println("\n1. PUT")
 		fmt.Println("2. GET")
