@@ -324,7 +324,101 @@ func(memtable *Memtable) insertHllToMemtable(key string, lru *LruCache) bool{
 	return true
 }
 
+func(memtable *Memtable) insertCmsToMemtable(key string, lru *LruCache) bool{
+	/*
+		Trazi od korisnika da unese odredjene parametre za CMS tabelu(epsilon delta)
+		Standardne vrednosti za njih su 0.01 i 0.01
+		Zatim korisnik redom popunjava tabelu i ona se dodaje u memtable
+	*/
 
+	key = key + "_cms"
+
+	// ovde ide pitanje sta hoce put ili delete
+	fmt.Println("1. Put")
+	fmt.Println("2. Delete")
+	var decision string
+	fmt.Print("\nChoose option:\n>> ")
+	// Taking input from user
+	fmt.Scanln(&decision)
+
+	if decision == "1"{
+		node := get(memtable, lru, key)
+		if node == nil{
+			fmt.Println("Enter Epsilon:\n>> ")
+			var epsilon, delta float64
+			_, err := fmt.Scanln(&epsilon)
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println("Enter Delta:\n>> ")
+			_, err = fmt.Scanln(&delta)
+			if err != nil {
+				panic(err)
+			}
+
+			cms := &CountMinSketch{}
+			cms.initializeCountMinSketch(epsilon, delta)
+
+			fmt.Println("Enter values to put in CMS until x is pressed.")
+			var value string = ""
+			fmt.Println(">> ")
+			_, err = fmt.Scanln(&value)
+			if err != nil{
+				panic(err)
+			}
+			for value != "x"{
+				cms.addElement(value)
+				fmt.Println(">> ")
+				_, err := fmt.Scanln(&value)
+				if err != nil {
+					panic(err)
+				}
+			}
+			fmt.Printf("CMS with name: %s sucesfully created.\n", key)
+
+			memtable.insertToMemtable(key, cms.encodeCmsToBytes(), 0)
+		}else{
+			// deserijalizujemo i dodajemo nove vrednosti
+			// deserijalizujemo i dodajemo nove vrednosti
+			cms := &CountMinSketch{}
+			cms.decodeCMSFromBytes(node.value)
+			fmt.Println("Enter values to put in CMS until x is pressed.")
+			var value string = ""
+			fmt.Println(">> ")
+			_, err := fmt.Scanln(&value)
+			if err != nil{
+				panic(err)
+			}
+
+			for value != "x"{
+				cms.addElement(value)
+				fmt.Println(">> ")
+				_, err := fmt.Scanln(&value)
+				if err != nil {
+					panic(err)
+				}
+			}
+			memtable.insertToMemtable(key, cms.encodeCmsToBytes(), 1)
+		}
+
+	}else if decision == "2"{
+		// odraditi delete
+		node := get(memtable, lru, key)
+		if node == nil{
+			return true
+		}else{
+			memtable.insertToMemtable(key, []byte(""), 2)
+		}
+	}else{
+		fmt.Println("Neispravan unos.")
+		return false
+	}
+
+	return true
+
+
+	return true
+}
 
 
 func(memtable *Memtable) insertToMemtable(key string, value []byte, indicator int) bool{
