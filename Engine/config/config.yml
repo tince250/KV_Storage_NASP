@@ -5,3 +5,6 @@ wal_threshold: 150
 cache_size: 20
 lsm_level: 4
 max_height: 5
+token_number: 5
+timer_reset: 5
+max_tables_per_level: 2
