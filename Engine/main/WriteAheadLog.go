@@ -32,12 +32,14 @@ type ToWriteStruct struct {
 	Key string
 	Value []byte
 }
+
 type Data struct {
 	key string
 	value []byte
 	ts byte
 	timeStamp uint64
 }
+
 type Buffer struct {
 	data []*Data
 }
@@ -66,6 +68,9 @@ func bufferedWritter(buffer *Buffer, filepath string) bool{
 }
 
 func writeData(key string, value []byte, filepath string, tombstone byte, timestamp uint64) bool{
+	/*
+		Upisuje jedan podatak u WAL.
+	*/
 	if !existsFile(filepath){
 		_, err := os.Create(filepath)
 		if err!=nil{
@@ -73,15 +78,20 @@ func writeData(key string, value []byte, filepath string, tombstone byte, timest
 		}
 	}
 
+	// pakujemo podatke u strukturu za ispis
 	checksum := CRC32(value)
 	tws := ToWriteStruct{checksum, timestamp, tombstone, uint64(len(key)), uint64(len(value)), key, value}
-
+	
+	// format sloga:
 	//crc(4b) timeStamp(8b) tombstone(1b) keySize(8b) valueSize(8b) key value
 	file, err := os.OpenFile(filepath, os.O_APPEND, 0777)
+	
 	//size := 4 + 8 + 1 + 8 + 8 + tws.keySize + tws.valueSize
 	if err!=nil{
 		return false
 	}
+	
+	// upis u fajl
 	binary.Write(file, binary.LittleEndian, tws.Crc)
 	binary.Write(file, binary.LittleEndian, tws.Timestamp)
 	binary.Write(file, binary.LittleEndian, tws.Tombstone)
@@ -99,11 +109,14 @@ func writeData(key string, value []byte, filepath string, tombstone byte, timest
 }
 
 func readFullData(filepath string) []*Data{
+	/*
+		Cita sve podatke iz svih segmenata WAL-a.
+	*/
 
 	filenames := readDirectory(filepath)
 	data := make([]*Data, 0)
 	for _, i:= range filenames {
-
+		// citamo sve bajtove iz fajla i redom ih kovertujemo u podatke
 		bytes, err := ioutil.ReadFile(i)
 
 		if len(bytes) == 0{
@@ -124,6 +137,7 @@ func readFullData(filepath string) []*Data{
 			ts := bytes[CRC_SIZE+offset : offset+TOMBSTONE_SIZE][0]
 			keySize := binary.LittleEndian.Uint64(bytes[TOMBSTONE_SIZE+offset : KEY_SIZE+offset])
 			valueSize := binary.LittleEndian.Uint64(bytes[KEY_SIZE+offset : VALUE_SIZE+offset])
+			// 29 je velicina fiksnog dela WAL sloga
 			offset += 29
 			key := bytes[offset : offset+keySize]
 			offset = offset + keySize
@@ -134,6 +148,7 @@ func readFullData(filepath string) []*Data{
 			if err != nil {
 				panic(err)
 			}
+			// provera ispravnosti CRC-a
 			if crc == CRC32(value) {
 				data = append(data, &Data{string(key), value, ts, timeStamp})
 
@@ -146,7 +161,10 @@ func readFullData(filepath string) []*Data{
 }
 
 func readData(filepath string, lines int) []*Data{
-
+	/* 
+		Cita odredjen broj linja iz WAL-a.
+		*Funkcija sa vezbi, nije koriscena u projektu.
+	*/
 	humanList := make([]*Data, lines, lines)
 	file, err := os.OpenFile(filepath, os.O_RDONLY, 0777)
 	if err !=nil{
@@ -200,16 +218,9 @@ func readData(filepath string, lines int) []*Data{
 		//	humanList[i] = &Human{key, value}
 		//}
 		fmt.Println(key, value)
-
-		//fmt.Println(vSizeInt)
-		//fmt.Println(kSizeInt)
 		fmt.Println(crc)
 		fmt.Println(timeStamp)
 		fmt.Println(tombstone)
-		//fmt.Println(keySize)
-		//fmt.Println(valueSize)
-		//fmt.Println(key)
-		//fmt.Println(value)
 
 	}
 	err = file.Close()
@@ -223,5 +234,7 @@ func readData(filepath string, lines int) []*Data{
 
 
 func CRC32(data []byte) uint32 {
+	// ChecksumIEEE returns the CRC-32 checksum of data
+	// using the IEEE polynomial
 	return crc32.ChecksumIEEE(data)
 }
