@@ -39,7 +39,9 @@ func (hll *HLL) createHLL(p uint8) bool{
 }
 
 func(hll *HLL) encodeHllToBytes() []byte{
-
+	/*
+		Pomocu bytes.Buffer enkodira strukturu u niz bajtova i vraca je takvu.
+	*/
 	var buffer bytes.Buffer
 	enc := gob.NewEncoder(&buffer)
 	err := enc.Encode(hll)
@@ -50,6 +52,9 @@ func(hll *HLL) encodeHllToBytes() []byte{
 	return buffer.Bytes()
 }
 func(hll *HLL) decodeHllFromBytes(hllBytes []byte) bool{
+	/*
+		Pomocu bytes.Buffer dekodira strukturu iz niza bajtova u samu sebe i vraca true ukoliko je uspesno izvrseno
+	*/
 	var bytes bytes.Buffer
 	bytes.Write(hllBytes)
 	decoder := gob.NewDecoder(&bytes)
