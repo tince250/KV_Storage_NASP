@@ -23,7 +23,10 @@ type Node struct {
 }
 
 func (merkle *MerkleRoot) formMerkle(data [][]byte){
-
+	/*
+		Formira merkle stablo. Parametar je niz value vrednosti tj listovi za merkle stablo.
+		Za svaki list kreira novi nod i poziva rekurzivnu funkciju za formiranje stabla od dole.
+	*/
 	nodeArray := make([]*Node, len(data))
 	for i:=0;i<len(nodeArray);i++{
 		nodeArray[i] = &Node{Hash(data[i]), nil, nil}
@@ -33,6 +36,10 @@ func (merkle *MerkleRoot) formMerkle(data [][]byte){
 }
 
 func(merkle *MerkleRoot) formMerklePrivate(data []*Node){
+	/*
+		Rekurzivna funkcija za formiranje nivoa merkle stabla od dole ka gore. Parametar su Nodeovi sa prethodnog nivoa
+		Ukoliko nema paran broj dodaje se prazan node.
+	*/
 	// da li su samo 2? ako jesu onda je root
 	if len(data) == 2{
 		merkle.root = &Node{Hash(append(data[0].data[:], data[1].data[:]...)), data[0], data[1]}
@@ -54,6 +61,9 @@ func(merkle *MerkleRoot) formMerklePrivate(data []*Node){
 
 func(merkle *MerkleRoot) serializeMerkle(filename string) {
 
+	/*
+		Funkcija za serijalizaciju merkle stabla.
+	*/
 	file, err := os.OpenFile(filename, os.O_WRONLY, 0777)
 	if err!=nil{
 
@@ -71,6 +81,10 @@ func(merkle *MerkleRoot) serializeMerkle(filename string) {
 
 }
 func writeCurrentLevel(node *Node, level int, file *os.File){
+	/*
+		Rekurzivna funkcija za serijalizaciju merkle stabla.
+		Proverava koji je level i prolazi sa breadth first algoritmom.
+	*/
 	if node == nil{
 		return
 	}
