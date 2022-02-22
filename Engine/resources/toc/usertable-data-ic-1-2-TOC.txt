@@ -1,0 +1,6 @@
+resources/data/usertable-data-ic-1-2-Data.db
+resources/filter/usertable-data-ic-1-2-Filter.db
+resources/index/usertable-data-ic-1-2-Index.db
+resources/summary/usertable-data-ic-1-2-Summary.db
+resources/toc/usertable-data-ic-1-2-TOC.txt
+resources/metadata/usertable-data-ic-1-2-metadata.db
