@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -38,6 +39,7 @@ func compact(maxLSMLevel uint64, maxTablesPerLevel int) bool {
 
 	}
 
+	fmt.Println("Compaction successful.")
 	return true
 }
 

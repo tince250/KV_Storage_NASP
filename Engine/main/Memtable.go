@@ -244,7 +244,7 @@ func(memtable *Memtable) insertHllToMemtable(key string, lru *LruCache) bool{
 	key = key + "_hll"
 
 	// ovde ide pitanje sta hoce put ili delete
-	fmt.Println("1. Put")
+	fmt.Println("\n1. Put")
 	fmt.Println("2. Delete")
 	var decision string
 	fmt.Print("\nChoose option:\n>> ")
@@ -255,7 +255,7 @@ func(memtable *Memtable) insertHllToMemtable(key string, lru *LruCache) bool{
 		node := get(memtable, lru, key)
 		if node == nil{
 			// kreiramo novi HLL
-			fmt.Println("Enter P [4, 16]")
+			fmt.Println("Enter P in range [4, 16]: ")
 			var p uint8
 			_, err := fmt.Scanln(&p)
 			if err != nil {
@@ -269,7 +269,7 @@ func(memtable *Memtable) insertHllToMemtable(key string, lru *LruCache) bool{
 			hll.createHLL(p)
 			fmt.Println("Enter values to put in HLL until x is pressed.")
 			var value string = ""
-			fmt.Println(">> ")
+			fmt.Print(">> ")
 			_, err = fmt.Scanln(&value)
 			if err != nil{
 				panic(err)
@@ -277,7 +277,7 @@ func(memtable *Memtable) insertHllToMemtable(key string, lru *LruCache) bool{
 
 			for value != "x"{
 				hll.addData([]byte(value))
-				fmt.Println(">> ")
+				fmt.Print(">> ")
 				_, err := fmt.Scanln(&value)
 				if err != nil {
 					panic(err)
@@ -291,7 +291,7 @@ func(memtable *Memtable) insertHllToMemtable(key string, lru *LruCache) bool{
 			hll.decodeHllFromBytes(node.value)
 			fmt.Println("Enter values to put in HLL until x is pressed.")
 			var value string = ""
-			fmt.Println(">> ")
+			fmt.Print(">> ")
 			_, err := fmt.Scanln(&value)
 			if err != nil{
 				panic(err)
@@ -299,7 +299,7 @@ func(memtable *Memtable) insertHllToMemtable(key string, lru *LruCache) bool{
 
 			for value != "x"{
 				hll.addData([]byte(value))
-				fmt.Println(">> ")
+				fmt.Print(">> ")
 				_, err := fmt.Scanln(&value)
 				if err != nil {
 					panic(err)
@@ -334,7 +334,7 @@ func(memtable *Memtable) insertCmsToMemtable(key string, lru *LruCache) bool{
 	key = key + "_cms"
 
 	// ovde ide pitanje sta hoce put ili delete
-	fmt.Println("1. Put")
+	fmt.Println("\n1. Put")
 	fmt.Println("2. Delete")
 	var decision string
 	fmt.Print("\nChoose option:\n>> ")
@@ -344,13 +344,13 @@ func(memtable *Memtable) insertCmsToMemtable(key string, lru *LruCache) bool{
 	if decision == "1"{
 		node := get(memtable, lru, key)
 		if node == nil{
-			fmt.Println("Enter Epsilon:\n>> ")
+			fmt.Print("Enter Epsilon:\n>> ")
 			var epsilon, delta float64
 			_, err := fmt.Scanln(&epsilon)
 			if err != nil {
 				panic(err)
 			}
-			fmt.Println("Enter Delta:\n>> ")
+			fmt.Print("Enter Delta:\n>> ")
 			_, err = fmt.Scanln(&delta)
 			if err != nil {
 				panic(err)
@@ -361,14 +361,14 @@ func(memtable *Memtable) insertCmsToMemtable(key string, lru *LruCache) bool{
 
 			fmt.Println("Enter values to put in CMS until x is pressed.")
 			var value string = ""
-			fmt.Println(">> ")
+			fmt.Print(">> ")
 			_, err = fmt.Scanln(&value)
 			if err != nil{
 				panic(err)
 			}
 			for value != "x"{
 				cms.addElement(value)
-				fmt.Println(">> ")
+				fmt.Print(">> ")
 				_, err := fmt.Scanln(&value)
 				if err != nil {
 					panic(err)
@@ -384,7 +384,7 @@ func(memtable *Memtable) insertCmsToMemtable(key string, lru *LruCache) bool{
 			cms.decodeCMSFromBytes(node.value)
 			fmt.Println("Enter values to put in CMS until x is pressed.")
 			var value string = ""
-			fmt.Println(">> ")
+			fmt.Print(">> ")
 			_, err := fmt.Scanln(&value)
 			if err != nil{
 				panic(err)
@@ -392,7 +392,7 @@ func(memtable *Memtable) insertCmsToMemtable(key string, lru *LruCache) bool{
 
 			for value != "x"{
 				cms.addElement(value)
-				fmt.Println(">> ")
+				fmt.Print(">> ")
 				_, err := fmt.Scanln(&value)
 				if err != nil {
 					panic(err)
@@ -500,6 +500,7 @@ func(memtable *Memtable) insertToMemtable(key string, value []byte, indicator in
 		memtable.currentSize = 0
 		memtable.skiplist = SkipList{}
 		memtable.skiplist.createSkipList(maxHeight, memtable.threshold, walThreshold)
+		fmt.Println("SStable successfully flushed.")
 	}
 	return true
 }
